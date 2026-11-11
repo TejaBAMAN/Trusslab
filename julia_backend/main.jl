@@ -1,4 +1,6 @@
 # julia_backend/main.jl
+import Pkg
+Pkg.activate(@__DIR__)
 # Main entry point for Julia Truss Engineering and Analysis Backend
 
 include("validation.jl")
