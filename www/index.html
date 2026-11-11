@@ -448,7 +448,7 @@ select:disabled { opacity: 0.7 !important; cursor: not-allowed !important; }
     <div class="actions" id="topbarActions" style="display: none;">
     </div>
     <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
-      <div id="backendStatusBadge" onclick="checkBackendStatus(true)" style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 999px; background: #f1f5f9; color: var(--muted); cursor: pointer; user-select: none;" title="Click to test Julia backend connection">
+      <div id="backendStatusBadge" onclick="checkBackendStatus(true)" style="display: none !important; display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 999px; background: #f1f5f9; color: var(--muted); cursor: pointer; user-select: none;" title="Click to test Julia backend connection">
         <span id="backendStatusDot" style="width: 8px; height: 8px; border-radius: 50%; background: #94a3b8; display: inline-block;"></span>
         <span id="backendStatusText">Checking Backend...</span>
       </div>
@@ -797,7 +797,7 @@ select:disabled { opacity: 0.7 !important; cursor: not-allowed !important; }
     </div>
   </div>
   
-  <div class="nav-buttons"><button class="btn" onclick="go(6)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Back</button><button class="btn primary" onclick="finishProject();goHome()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Finish & Return Home</button></div>
+  <div class="nav-buttons"><button class="btn" onclick="go(6)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Back</button><button class="btn primary" onclick="finishProject();goHome()" style="background: #2563eb !important; color: #ffffff !important; font-weight: 600; opacity: 1 !important; border: none; box-shadow: 0 4px 12px rgba(37,99,235,0.3); display: inline-flex; align-items: center; cursor: pointer;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Finish & Return Home</button></div>
 </section>
 
 </main>
@@ -1159,6 +1159,15 @@ async function checkBackendStatus(showToast = false) {
     return 'client';
 }
 
+function finishProject(){
+  try {
+    saveProject(true, false);
+    localStorage.removeItem('activeProjectId');
+  } catch(e) {
+    console.warn("finishProject error:", e);
+  }
+}
+
 function goHome(){
   document.getElementById('homeScreen').classList.remove('hidden');
   document.getElementById('workflowScreen').classList.add('hidden');
@@ -1166,6 +1175,7 @@ function goHome(){
   document.getElementById('backButton').style.display='none';
   document.getElementById('topbarActions').style.display='none';
   renderSavedProjects();
+  window.scrollTo({top: 0, behavior: 'smooth'});
 }
 
 function getEdgeKey(a, b) { if(!a || !b) return null; let min = Math.min(a,b); let max = Math.max(a,b); return min + "-" + max; }
@@ -1370,6 +1380,10 @@ function generateGeometry() {
         el.id = idx + 1;
     });
     state.elements = uniqueElements;
+    let nodeCount = Object.keys(state.coords).length;
+    let elemCount = state.elements.length;
+    if(document.getElementById('sumUniqueNodes')) document.getElementById('sumUniqueNodes').textContent = nodeCount;
+    if(document.getElementById('sumUniqueElems')) document.getElementById('sumUniqueElems').textContent = elemCount;
 }
 
 function populateSupportNodeDropdown() {
@@ -3183,7 +3197,15 @@ function drawTruss(canvasId, pCoords, pElements, pAssign, deformed=false, loads=
   
   let w = maxX - minX; let h = maxY - minY;
   if(w===0) w=1; if(h===0) h=1;
-  let scale = Math.min((cw-240)/w, (ch-240)/h);
+  // Responsive padding: mobile-friendly clearance and perfect centering
+  let padX = small ? 15 : Math.max(35, Math.min(80, cw * 0.12));
+  let padY = small ? 15 : Math.max(40, Math.min(80, ch * 0.15));
+  let scale = Math.min((cw - 2 * padX) / w, (ch - 2 * padY) / h);
+  
+  let drawW = w * scale;
+  let drawH = h * scale;
+  let offX = (cw - drawW) / 2;
+  let offY = (ch - drawH) / 2;
   
   let magInfo = getAdaptiveDeformationScale(coords, (res ? res.U : null), scale, small ? 25.0 : 50.0);
   let activeMag = magScale || magInfo.magScale;
@@ -3191,7 +3213,7 @@ function drawTruss(canvasId, pCoords, pElements, pAssign, deformed=false, loads=
   let pOrig = {};
   let pDef = {};
   Object.keys(coords).forEach(n => {
-    let pt0 = [ 120 + (coords[n][0]-minX)*scale, ch - 120 - (coords[n][1]-minY)*scale ];
+    let pt0 = [ offX + (coords[n][0]-minX)*scale, ch - offY - (coords[n][1]-minY)*scale ];
     pOrig[n] = pt0;
     if(deformed && res && res.U) {
        pDef[n] = [
