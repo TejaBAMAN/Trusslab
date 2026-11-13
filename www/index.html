@@ -1238,9 +1238,9 @@ function buildTrianglesUI() {
               <div><label>Node 3</label><input value="${t.n3}" type="number" min="1" step="1" onkeydown="if(event.key==='.'||event.key===','||event.key==='-'||event.key==='e'||event.key==='E')event.preventDefault();" oninput="this.value=this.value.replace(/[^0-9]/g,'');updateLabels()"></div>
             </div>
             <div class="lengths" style="margin-top:20px">
-              <div><label id="lbl12_${i}">Length ${displayN1}-${displayN2}</label><input value="${t.l12}" type="number" min="0" step="any" placeholder="0.0" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(parseFloat(this.value)<0)this.value=0;updateLabels()"></div>
-              <div><label id="lbl23_${i}">Length ${displayN2}-${displayN3}</label><input value="${t.l23}" type="number" min="0" step="any" placeholder="0.0" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(parseFloat(this.value)<0)this.value=0;updateLabels()"></div>
-              <div><label id="lbl31_${i}">Length ${displayN3}-${displayN1}</label><input value="${t.l31}" type="number" min="0" step="any" placeholder="0.0" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(parseFloat(this.value)<0)this.value=0;updateLabels()"></div>
+              <div><label id="lbl12_${i}">Length ${displayN1}-${displayN2}</label><input value="${t.l12}" type="number" min="0" step="0.1" placeholder="0.0" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(parseFloat(this.value)<0)this.value=0;updateLabels()"></div>
+              <div><label id="lbl23_${i}">Length ${displayN2}-${displayN3}</label><input value="${t.l23}" type="number" min="0" step="0.1" placeholder="0.0" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(parseFloat(this.value)<0)this.value=0;updateLabels()"></div>
+              <div><label id="lbl31_${i}">Length ${displayN3}-${displayN1}</label><input value="${t.l31}" type="number" min="0" step="0.1" placeholder="0.0" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(parseFloat(this.value)<0)this.value=0;updateLabels()"></div>
             </div>
         </div>`;
     }

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'trusslab-v8';
+const CACHE_NAME = 'trusslab-v9';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
