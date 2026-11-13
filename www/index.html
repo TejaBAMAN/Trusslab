@@ -571,14 +571,14 @@ select:disabled { opacity: 0.7 !important; cursor: not-allowed !important; }
       <h2>Material Specification</h2>
       <div class="form-grid">
         <div><label>Material Preset</label><select><option>Structural Steel</option><option>High-Strength Concrete</option><option>Custom Isotropic</option></select></div>
-        <div><label>Young's Modulus (E)</label><input id="matE" value="" placeholder="e.g. 200" type="number"></div>
-        <div><label>Poisson's Ratio (ν)</label><input id="matNu" value="" placeholder="e.g. 0.30" type="number" step="0.01"></div>
-        <div><label>Density (ρ)</label><input id="matDensity" value="" placeholder="e.g. 7850" type="number"></div>
+        <div><label>Young's Modulus (E)</label><input id="matE" value="" placeholder="e.g. 200" type="number" min="0" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(parseFloat(this.value)<0)this.value=0;"></div>
+        <div><label>Poisson's Ratio (ν)</label><input id="matNu" value="" placeholder="e.g. 0.30" type="number" step="0.01" min="0" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(parseFloat(this.value)<0)this.value=0;"></div>
+        <div><label>Density (ρ)</label><input id="matDensity" value="" placeholder="e.g. 7850" type="number" min="0" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(parseFloat(this.value)<0)this.value=0;"></div>
       </div>
     </div>
     <div class="card">
       <h2>Cross Section</h2>
-      <label>Area (A)</label><input id="matA" value="" placeholder="e.g. 500" type="number">
+      <label>Area (A)</label><input id="matA" value="" placeholder="e.g. 500" type="number" min="0" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(parseFloat(this.value)<0)this.value=0;">
       <label style="margin-top:16px">Area Unit</label><select><option>mm²</option><option>cm²</option><option>m²</option></select>
       
     </div>
@@ -1233,14 +1233,14 @@ function buildTrianglesUI() {
         <div class="card" id="tCard${i}" ${mt}>
             <div class="row"><h2>Triangle ${i+1}</h2></div>
             <div class="form-grid">
-              <div><label>Node 1</label><input value="${t.n1}" type="number" oninput="updateLabels()"></div>
-              <div><label>Node 2</label><input value="${t.n2}" type="number" oninput="updateLabels()"></div>
-              <div><label>Node 3</label><input value="${t.n3}" type="number" oninput="updateLabels()"></div>
+              <div><label>Node 1</label><input value="${t.n1}" type="number" min="1" step="1" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(this.value<1&&this.value!=='')this.value=1;updateLabels()"></div>
+              <div><label>Node 2</label><input value="${t.n2}" type="number" min="1" step="1" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(this.value<1&&this.value!=='')this.value=1;updateLabels()"></div>
+              <div><label>Node 3</label><input value="${t.n3}" type="number" min="1" step="1" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(this.value<1&&this.value!=='')this.value=1;updateLabels()"></div>
             </div>
             <div class="lengths" style="margin-top:20px">
-              <div><label id="lbl12_${i}">Length ${displayN1}-${displayN2}</label><input value="${t.l12}" type="number" step="0.1" placeholder="0.0" oninput="updateLabels()"></div>
-              <div><label id="lbl23_${i}">Length ${displayN2}-${displayN3}</label><input value="${t.l23}" type="number" step="0.1" placeholder="0.0" oninput="updateLabels()"></div>
-              <div><label id="lbl31_${i}">Length ${displayN3}-${displayN1}</label><input value="${t.l31}" type="number" step="0.1" placeholder="0.0" oninput="updateLabels()"></div>
+              <div><label id="lbl12_${i}">Length ${displayN1}-${displayN2}</label><input value="${t.l12}" type="number" min="0" step="any" placeholder="0.0" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(parseFloat(this.value)<0)this.value=0;updateLabels()"></div>
+              <div><label id="lbl23_${i}">Length ${displayN2}-${displayN3}</label><input value="${t.l23}" type="number" min="0" step="any" placeholder="0.0" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(parseFloat(this.value)<0)this.value=0;updateLabels()"></div>
+              <div><label id="lbl31_${i}">Length ${displayN3}-${displayN1}</label><input value="${t.l31}" type="number" min="0" step="any" placeholder="0.0" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(parseFloat(this.value)<0)this.value=0;updateLabels()"></div>
             </div>
         </div>`;
     }
@@ -1300,8 +1300,12 @@ function saveTrianglesFromDOM() {
         const inputs = card.querySelectorAll('input[type="number"]');
         if(inputs.length === 6) { 
             newTriangles.push({
-                n1: Number(inputs[0].value), n2: Number(inputs[1].value), n3: Number(inputs[2].value),
-                l12: Number(inputs[3].value), l23: Number(inputs[4].value), l31: Number(inputs[5].value)
+                n1: Math.max(1, Number(inputs[0].value) || 1),
+                n2: Math.max(1, Number(inputs[1].value) || 1),
+                n3: Math.max(1, Number(inputs[2].value) || 1),
+                l12: Math.max(0, Number(inputs[3].value) || 0),
+                l23: Math.max(0, Number(inputs[4].value) || 0),
+                l31: Math.max(0, Number(inputs[5].value) || 0)
             });
         }
     });
