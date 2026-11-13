@@ -1,10 +1,10 @@
-const CACHE_NAME = 'trusslab-v5';
+const CACHE_NAME = 'trusslab-v6';
 const STATIC_ASSETS = [
-  './',
-  './index.html',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png'
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {

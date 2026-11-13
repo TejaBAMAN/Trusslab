@@ -2390,7 +2390,7 @@ function createCrispDiagram(mode, targetWidth = 1100, targetHeight = 440) {
     
     let w = maxX - minX || 1;
     let h = maxY - minY || 1;
-    let padX = 140, padY = (mode === 'geometry') ? 110 : ((mode === 'deformed') ? 95 : 80);
+    let padX = 140, padY = (mode === 'geometry') ? 110 : ((mode === 'deformed') ? 95 : 120);
     let scale = Math.min((targetWidth - 2 * padX) / w, (targetHeight - 2 * padY) / h);
     let offsetX = padX + ((targetWidth - 2 * padX) - w * scale) / 2;
     let offsetY = padY + ((targetHeight - 2 * padY) - h * scale) / 2;
@@ -2605,12 +2605,17 @@ function createCrispDiagram(mode, targetWidth = 1100, targetHeight = 440) {
             x.translate(midX, midY);
             x.rotate(angle);
 
+            // Shift bottom horizontal element badges upward into the truss to prevent hanging below chord
+            if (mode === 'geometry' && Math.abs(dy) < 1e-4) {
+                x.translate(0, -14);
+            }
+
             let lenVal = Number(String(el.length).replace(',', '.')) || 0;
             let labelText = (mode === 'geometry') ? `E${el.id}` : `${lenVal.toFixed(2)} m`;
             
             x.font = (mode === 'geometry') 
-                ? '700 12px system-ui, -apple-system, sans-serif' 
-                : '700 13px system-ui, -apple-system, sans-serif';
+                ? "700 12px 'Segoe UI', Arial, sans-serif" 
+                : "700 13px 'Segoe UI', Arial, sans-serif";
             x.textAlign = 'center';
             x.textBaseline = 'middle';
 
@@ -2685,7 +2690,8 @@ function generateReportHTML() {
         if (v === null || v === undefined) return '0.' + '0'.repeat(dec);
         let n = parseFloat(String(v).replace(',', '.'));
         if (isNaN(n) || !isFinite(n)) n = 0;
-        return n.toFixed(dec); // ECMAScript toFixed() is guaranteed to use period '.' decimal separator
+        let s = n.toFixed(dec);
+        return s.replace(/\.+$/, ''); // Guaranteed no trailing period
     };
     const fmtLen = fmtDot;
 
@@ -2700,9 +2706,12 @@ function generateReportHTML() {
     
     // Section 3: Element Connectivity (Guaranteed 1-to-1 matching with Section 10!)
     let elHtml = (res && res.elements ? res.elements : state.elements).map(el => {
+        let sNode = parseInt(el.startNode);
+        let eNode = parseInt(el.endNode);
         let len = (typeof el.length === 'number') ? el.length : parseFloat(String(el.length).replace(',', '.'));
         if (isNaN(len) || !isFinite(len)) len = 0;
-        return `<tr><td><b style="color:#1e3a8a;">E${el.id}</b></td><td>N${el.startNode}</td><td>N${el.endNode}</td><td>${len.toFixed(3)}</td></tr>`;
+        let lenStr = fmtDot(len, 3);
+        return `<tr><td style="font-weight:700; color:#1e3a8a;">E${el.id}</td><td style="font-family:'Segoe UI', Arial, sans-serif; font-variant-numeric: tabular-nums;">N${sNode}</td><td style="font-family:'Segoe UI', Arial, sans-serif; font-variant-numeric: tabular-nums;">N${eNode}</td><td style="font-family:'Segoe UI', Arial, sans-serif; font-variant-numeric: tabular-nums;">${lenStr}</td></tr>`;
     }).join('');
     let tHtml = (state.triangles||[]).map((t, i) => {
         let l12 = parseFloat(String(t.l12).replace(',', '.')) || 0;
@@ -2805,8 +2814,8 @@ function generateReportHTML() {
     // Section 10: Persistent IDs (E1..En), Consistent Signs & Euler Buckling Capacity
     let forcesHtml = res.elements ? res.elements.map(el => {
         let forceFormatted = (el.force > 0) 
-            ? `<span style="color:#16a34a; font-weight:700;">+${el.force.toFixed(2)} (T)</span>` 
-            : (el.force < 0 ? `<span style="color:#dc2626; font-weight:700;">${el.force.toFixed(2)} (C)</span>` : `<span style="color:#64748b;">0.00</span>`);
+            ? `<span style="color:#16a34a; font-weight:700; font-family:'Segoe UI', Arial, sans-serif;">+${Math.abs(el.force).toFixed(2)} (T)</span>` 
+            : (el.force < 0 ? `<span style="color:#dc2626; font-weight:700; font-family:'Segoe UI', Arial, sans-serif;">-${Math.abs(el.force).toFixed(2)} (C)</span>` : `<span style="color:#64748b; font-family:'Segoe UI', Arial, sans-serif;">0.00</span>`);
 
         let stressFormatted = (el.stress > 0)
             ? `<span style="color:#16a34a;">+${el.stress.toFixed(2)}</span>`
@@ -2845,6 +2854,49 @@ function generateReportHTML() {
             let d = Math.hypot(res.U[2*n - 2], res.U[2*n - 1]);
             if (d > maxD) { maxD = d; maxDispNode = n; }
         });
+    }
+
+        // Dynamic Structural Verdict & Instability Evaluation (Section 12)
+    let allowableStress = (state && state.allowableStress) ? Number(state.allowableStress) : 250.0; // 250 MPa default for structural steel
+    let buckledMembers = [];
+    let overstressedMembers = [];
+    let maxBucklingDemandPct = 0;
+
+    if (res && res.elements) {
+        res.elements.forEach(el => {
+            let Pcr_N = (Math.PI * Math.PI * E_val * I_eff) / (el.length * el.length);
+            let Pcr_kN = Pcr_N / 1000.0;
+            if (el.force < -1e-6) {
+                let demandPct = Math.round((Math.abs(el.force) / Pcr_kN) * 100);
+                if (demandPct > maxBucklingDemandPct) maxBucklingDemandPct = demandPct;
+                if (demandPct >= 100 || (el.state && el.state.includes('Buckled'))) {
+                    buckledMembers.push({ id: el.id, pct: demandPct });
+                }
+            }
+            if (Math.abs(el.stress) > allowableStress) {
+                overstressedMembers.push({ id: el.id, stress: Math.abs(el.stress) });
+            }
+        });
+    }
+
+    let isUnsafe = (buckledMembers.length > 0) || (overstressedMembers.length > 0);
+    let verdictBoxStyle = isUnsafe 
+        ? `background: #fef2f2; border: 1.5px solid #ef4444; border-radius: 6px; padding: 10px 14px; font-size: 10px; line-height: 1.5; color: #991b1b; margin-top: 8px; box-shadow: 0 1px 3px rgba(239,68,68,0.1);`
+        : `background: #f0fdf4; border: 1.5px solid #22c55e; border-radius: 6px; padding: 10px 14px; font-size: 10px; line-height: 1.5; color: #166534; margin-top: 8px; box-shadow: 0 1px 3px rgba(34,197,94,0.1);`;
+
+    let verdictBadge = isUnsafe
+        ? `<span style="background:#fee2e2; color:#b91c1c; font-weight:800; padding:2px 8px; border-radius:4px; font-size:9.5px; margin-right:6px; display:inline-block; border:1px solid #fca5a5;">UNSAFE / REDESIGN REQUIRED</span>`
+        : `<span style="background:#dcfce7; color:#15803d; font-weight:800; padding:2px 8px; border-radius:4px; font-size:9.5px; margin-right:6px; display:inline-block; border:1px solid #86efac;">STRUCTURAL INTEGRITY ADEQUATE ✓</span>`;
+
+    let verdictText = '';
+    if (buckledMembers.length > 0) {
+        let buckledIDs = buckledMembers.map(m => `E${m.id}`).join(', ');
+        verdictText = `<b>Structural Verdict:</b> The finite element analysis converged successfully and global static equilibrium is satisfied (Max displacement: <b>${res.maxDisp.toFixed(2)} mm</b>, Peak stress: <b>${maxStressVal.toFixed(1)} MPa</b>). However, critical instability was detected: member(s) <b>${buckledIDs}</b> exceed their Euler critical buckling capacity (max demand: <b>${maxBucklingDemandPct}% of P<sub>cr</sub></b>). Consequently, the structure cannot be declared safe in its current configuration and requires cross-section stiffening or bracing redesign.`;
+    } else if (overstressedMembers.length > 0) {
+        let overIDs = overstressedMembers.map(m => `E${m.id}`).join(', ');
+        verdictText = `<b>Structural Verdict:</b> The finite element analysis converged successfully and global static equilibrium is satisfied (Max displacement: <b>${res.maxDisp.toFixed(2)} mm</b>, Peak stress: <b>${maxStressVal.toFixed(1)} MPa</b>). However, excessive axial stress was detected: member(s) <b>${overIDs}</b> exceed allowable yield capacity (peak stress: <b>${maxStressVal.toFixed(1)} MPa</b> vs allowable <b>${allowableStress.toFixed(0)} MPa</b>). Consequently, the structure cannot be declared safe in its current configuration and requires cross-section enlargement.`;
+    } else {
+        verdictText = `<b>Structural Verdict:</b> The finite element analysis converged successfully and global static equilibrium is satisfied. Maximum nodal displacement (<b>${res.maxDisp.toFixed(2)} mm</b>) and peak axial stress (<b>${maxStressVal.toFixed(1)} MPa</b>) remain well within elastic limits, and all compression members are safe against Euler buckling. The structure is stable and adequate for the applied loads.`;
     }
 
     let dateStr = new Date().toLocaleDateString('en-GB', {day: '2-digit', month: 'long', year: 'numeric'});
@@ -2906,7 +2958,7 @@ function generateReportHTML() {
     <b>Convergence Status:</b><span class="badge">Analysis Converged ✓</span>
   </div>
   <h3>Structural Model Overview</h3>
-  <div class="diagram" style="height: 270px;"><img src="${overviewImg}"></div>
+  <div class="diagram" style="height: 270px; padding-top: 10px; overflow: hidden; position: relative;"><img src="${overviewImg}" style="max-height: 100%; max-width: 100%; object-fit: contain; display: block; margin: 0 auto;"></div>
   <div class="note">
     <b>Executive Summary:</b> This engineering document contains verified mathematical results for nodal geometry, applied boundary conditions, structural load paths, support reactions, and element internal stress states. Numerical quantities are calculated directly from equilibrium equations and elasticity criteria.
   </div>
@@ -2980,7 +3032,7 @@ function generateReportHTML() {
       </tr>
       <tr>
         <td>Poisson's Ratio</td>
-        <td><span style="font-weight:700; font-family:serif; font-style:italic;">&nu;</span></td>
+        <td><span style="font-weight:700; font-family:'Segoe UI', Roboto, Arial, sans-serif; font-style:italic;">&nu;</span></td>
         <td>${(state.nu || 0.30).toFixed(2)}</td>
         <td>&mdash;</td>
       </tr>
@@ -3041,12 +3093,12 @@ function generateReportHTML() {
   </table>
   <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px; padding:6px 12px; font-size:10px; margin-top:-2px; margin-bottom:8px;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-      <span style="font-weight:700; color:#1e293b;">Static Equilibrium Verification (&Sigma; F = 0):</span>
+      <span style="font-weight:700; color:#1e293b;">Static Equilibrium Verification (Sum(F) = 0):</span>
       <span class="badge" style="background:#e8f6ee; color:#16a34a; font-weight:700; font-size:9.5px;">Global Equilibrium Satisfied ✓</span>
     </div>
     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; font-variant-numeric: tabular-nums; font-size:9.5px; color:#334155; background:#ffffff; border:1px solid #e2e8f0; border-radius:4px; padding:6px 10px;">
-      <div><b>&Sigma; F<sub>x</sub></b> = &Sigma; F<sub>x,applied</sub> + &Sigma; R<sub>x</sub> = (${fmtF(sumFxApp)}) + (${fmtF(sumRx)}) = <b>${Math.abs(netFx) < 0.01 ? '0.00 kN' : fmtF(netFx)}</b> <span style="color:#16a34a; font-weight:800;">✓</span></div>
-      <div><b>&Sigma; F<sub>y</sub></b> = &Sigma; F<sub>y,applied</sub> + &Sigma; R<sub>y</sub> = (${fmtF(sumFyApp)}) + (${fmtF(sumRy)}) = <b>${Math.abs(netFy) < 0.01 ? '0.00 kN' : fmtF(netFy)}</b> <span style="color:#16a34a; font-weight:800;">✓</span></div>
+      <div><b>Sum(F<sub>x</sub>)</b> = Sum(F<sub>x,applied</sub>) + Sum(R<sub>x</sub>) = (${fmtF(sumFxApp)}) + (${fmtF(sumRx)}) = <b>${Math.abs(netFx) < 0.01 ? '0.00 kN' : fmtF(netFx)}</b> <span style="color:#16a34a; font-weight:800;">✓</span></div>
+      <div><b>Sum(F<sub>y</sub>)</b> = Sum(F<sub>y,applied</sub>) + Sum(R<sub>y</sub>) = (${fmtF(sumFyApp)}) + (${fmtF(sumRy)}) = <b>${Math.abs(netFy) < 0.01 ? '0.00 kN' : fmtF(netFy)}</b> <span style="color:#16a34a; font-weight:800;">✓</span></div>
     </div>
   </div>
 
@@ -3116,8 +3168,9 @@ function generateReportHTML() {
     </div>
   </div>
 
-  <div class="note">
-    <b>Structural Verdict:</b> The finite element analysis converged successfully. Maximum nodal displacement of <b>${res.maxDisp.toFixed(2)} mm</b> and peak stress of <b>${maxStressVal.toFixed(1)} MPa</b> remain within structural limits. All reactions balance applied loading in static equilibrium.
+  <div style="${verdictBoxStyle}">
+    <div style="margin-bottom: 4px;">${verdictBadge}</div>
+    <div>${verdictText}</div>
   </div>
 
   <div class="footer"><span>TrussLab Analyzer · Complete Engineering Report</span><span>Page 4 of 4</span></div>
@@ -3299,6 +3352,7 @@ function drawTruss(canvasId, pCoords, pElements, pAssign, deformed=false, loads=
       let midY = (p1[1] + p2[1]) / 2;
       let dx = p2[0] - p1[0];
       let dy = p2[1] - p1[1];
+      let L_px = Math.hypot(dx, dy);
       let angle = Math.atan2(dy, dx);
       if(angle > Math.PI/2 || angle < -Math.PI/2) angle += Math.PI;
       
@@ -3306,11 +3360,27 @@ function drawTruss(canvasId, pCoords, pElements, pAssign, deformed=false, loads=
       x.translate(midX, midY);
       x.rotate(angle);
       
+      // Perpendicular offset so labels never collide with node joint circles (1 00 2 00 4)
+      let perpOffset = 0;
+      if (Math.abs(dy) < 1e-4) {
+          // Bottom / horizontal chord: shift downward by 14px so nodes 1, 2, 4 don't overlap
+          perpOffset = 14;
+      } else if (L_px < 110) {
+          perpOffset = 13;
+      }
+      if (perpOffset !== 0) {
+          x.translate(0, perpOffset);
+      }
+
       let lenVal = Number(String(el.length).replace(',', '.')) || 0;
       let text = lenVal.toFixed(2) + ' m';
-      x.font = '600 11px system-ui, -apple-system, sans-serif';
+      let isCompact = (cw < 500) || (L_px < 110);
+      let fontSize = isCompact ? 9.5 : 11;
+      x.font = `600 ${fontSize}px system-ui, -apple-system, sans-serif`;
       let tw = Math.ceil(x.measureText(text).width);
-      let padX = 6, padY = 3;
+      let padX = isCompact ? 4 : 6, padY = isCompact ? 2 : 3;
+      let pillH = fontSize + padY * 2;
+      let pillW = tw + padX * 2;
       
       // White background pill with border for legibility and zero clipping
       x.fillStyle = '#ffffff';
@@ -3318,9 +3388,9 @@ function drawTruss(canvasId, pCoords, pElements, pAssign, deformed=false, loads=
       x.lineWidth = 1;
       x.beginPath();
       if (x.roundRect) {
-        x.roundRect(-tw/2 - padX, -7 - padY, tw + padX*2, 14 + padY*2, 3);
+        x.roundRect(-pillW/2, -pillH/2, pillW, pillH, 3);
       } else {
-        x.rect(-tw/2 - padX, -7 - padY, tw + padX*2, 14 + padY*2);
+        x.rect(-pillW/2, -pillH/2, pillW, pillH);
       }
       x.fill();
       x.stroke();
@@ -3348,16 +3418,17 @@ function drawTruss(canvasId, pCoords, pElements, pAssign, deformed=false, loads=
   // Draw Nodes - WHITE CIRCLE WITH TEXT INSIDE
   Object.keys(p).forEach(n => {
     let pt = p[n];
+    let nodeRadius = small ? 5 : (cw < 500 ? 11 : 14);
     x.beginPath();
     x.fillStyle = '#ffffff';
     x.strokeStyle = deformed ? '#2563eb' : '#111827';
-    x.lineWidth = small ? 1.5 : 2.5;
-    x.arc(pt[0], pt[1], small ? 5 : 14, 0, Math.PI*2);
+    x.lineWidth = small ? 1.5 : 2.2;
+    x.arc(pt[0], pt[1], nodeRadius, 0, Math.PI*2);
     x.fill(); x.stroke();
     
     if(!small) {
       x.fillStyle = '#111827';
-      x.font = '800 12px Inter, sans-serif';
+      x.font = (cw < 500) ? '800 10.5px Inter, sans-serif' : '800 12px Inter, sans-serif';
       x.textAlign = 'center'; x.textBaseline = 'middle';
       x.fillText(n, pt[0], pt[1]+1);
     }
