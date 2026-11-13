@@ -524,9 +524,9 @@ select:disabled { opacity: 0.7 !important; cursor: not-allowed !important; }
                     <label style="font-size: 14px; font-weight: 600; margin-bottom: 8px; display: block;">Project Name</label>
         <input type="text" id="projectName" value="" placeholder="e.g. Bridge Truss 1" style="width: 100%; font-size: 16px; padding: 12px; border: 1px solid #cfd6dc; border-radius: 8px; outline: none; box-sizing: border-box; margin-bottom:16px;" oninput="document.getElementById('projectLabel').textContent=this.value||'New Project';">
 <label style="font-size: 14px; font-weight: 600; margin-bottom: 8px; display: block;">Number of Triangles</label>
-      <input type="number" id="inputTriangles" value="" placeholder="e.g. 2" min="1" max="20" onchange="buildTrianglesUI()" style="width: 100%; font-size: 16px; padding: 12px; border: 1px solid #cfd6dc; border-radius: 8px; outline: none; box-sizing: border-box; margin-bottom:16px;">
+      <input type="number" id="inputTriangles" value="" placeholder="e.g. 2" min="1" max="20" step="1" onkeydown="if(event.key==='.'||event.key===','||event.key==='-'||event.key==='e'||event.key==='E')event.preventDefault();" oninput="this.value=this.value.replace(/[^0-9]/g,'');buildTrianglesUI();" onchange="buildTrianglesUI()" style="width: 100%; font-size: 16px; padding: 12px; border: 1px solid #cfd6dc; border-radius: 8px; outline: none; box-sizing: border-box; margin-bottom:16px;">
       <label style="font-size: 14px; font-weight: 600; margin-bottom: 8px; display: block;">Total Number of Nodes</label>
-      <input type="number" id="inputNodes" value="" placeholder="e.g. 4" min="3" max="20" style="width: 100%; font-size: 16px; padding: 12px; border: 1px solid #cfd6dc; border-radius: 8px; outline: none; box-sizing: border-box;">
+      <input type="number" id="inputNodes" value="" placeholder="e.g. 4" min="3" max="50" step="1" onkeydown="if(event.key==='.'||event.key===','||event.key==='-'||event.key==='e'||event.key==='E')event.preventDefault();" oninput="this.value=this.value.replace(/[^0-9]/g,'');" style="width: 100%; font-size: 16px; padding: 12px; border: 1px solid #cfd6dc; border-radius: 8px; outline: none; box-sizing: border-box;">
     </div>
   </div>
   <div class="nav-buttons" style="display: flex; justify-content: flex-end; margin-top: 32px; border-top: 1px solid #e1e8ed; padding-top: 24px;">
@@ -1233,9 +1233,9 @@ function buildTrianglesUI() {
         <div class="card" id="tCard${i}" ${mt}>
             <div class="row"><h2>Triangle ${i+1}</h2></div>
             <div class="form-grid">
-              <div><label>Node 1</label><input value="${t.n1}" type="number" min="1" step="1" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(this.value<1&&this.value!=='')this.value=1;updateLabels()"></div>
-              <div><label>Node 2</label><input value="${t.n2}" type="number" min="1" step="1" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(this.value<1&&this.value!=='')this.value=1;updateLabels()"></div>
-              <div><label>Node 3</label><input value="${t.n3}" type="number" min="1" step="1" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(this.value<1&&this.value!=='')this.value=1;updateLabels()"></div>
+              <div><label>Node 1</label><input value="${t.n1}" type="number" min="1" step="1" onkeydown="if(event.key==='.'||event.key===','||event.key==='-'||event.key==='e'||event.key==='E')event.preventDefault();" oninput="this.value=this.value.replace(/[^0-9]/g,'');updateLabels()"></div>
+              <div><label>Node 2</label><input value="${t.n2}" type="number" min="1" step="1" onkeydown="if(event.key==='.'||event.key===','||event.key==='-'||event.key==='e'||event.key==='E')event.preventDefault();" oninput="this.value=this.value.replace(/[^0-9]/g,'');updateLabels()"></div>
+              <div><label>Node 3</label><input value="${t.n3}" type="number" min="1" step="1" onkeydown="if(event.key==='.'||event.key===','||event.key==='-'||event.key==='e'||event.key==='E')event.preventDefault();" oninput="this.value=this.value.replace(/[^0-9]/g,'');updateLabels()"></div>
             </div>
             <div class="lengths" style="margin-top:20px">
               <div><label id="lbl12_${i}">Length ${displayN1}-${displayN2}</label><input value="${t.l12}" type="number" min="0" step="any" placeholder="0.0" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(parseFloat(this.value)<0)this.value=0;updateLabels()"></div>
@@ -1300,12 +1300,12 @@ function saveTrianglesFromDOM() {
         const inputs = card.querySelectorAll('input[type="number"]');
         if(inputs.length === 6) { 
             newTriangles.push({
-                n1: Math.max(1, Number(inputs[0].value) || 1),
-                n2: Math.max(1, Number(inputs[1].value) || 1),
-                n3: Math.max(1, Number(inputs[2].value) || 1),
-                l12: Math.max(0, Number(inputs[3].value) || 0),
-                l23: Math.max(0, Number(inputs[4].value) || 0),
-                l31: Math.max(0, Number(inputs[5].value) || 0)
+                n1: Math.max(1, parseInt(inputs[0].value, 10) || 1),
+                n2: Math.max(1, parseInt(inputs[1].value, 10) || 1),
+                n3: Math.max(1, parseInt(inputs[2].value, 10) || 1),
+                l12: Math.max(0, parseFloat(inputs[3].value) || 0),
+                l23: Math.max(0, parseFloat(inputs[4].value) || 0),
+                l31: Math.max(0, parseFloat(inputs[5].value) || 0)
             });
         }
     });
@@ -1527,8 +1527,8 @@ function selectAssignment(n){
 }
 
 function saveStateFromDOM() {
-    state.nodes = document.getElementById('inputNodes')?.value ? Number(document.getElementById('inputNodes').value) : undefined;
-    state.numTriangles = document.getElementById('inputTriangles')?.value ? Number(document.getElementById('inputTriangles').value) : undefined;
+    state.nodes = document.getElementById('inputNodes')?.value ? parseInt(document.getElementById('inputNodes').value, 10) : undefined;
+    state.numTriangles = document.getElementById('inputTriangles')?.value ? parseInt(document.getElementById('inputTriangles').value, 10) : undefined;
     let uiE = Number(document.getElementById('matE')?.value); if(uiE) state.E = uiE * 1e9;
     let uiA = Number(document.getElementById('matA')?.value); if(uiA) state.A = uiA * 1e-6;
     let uiNu = document.getElementById('matNu')?.value; if(uiNu !== '') state.nu = Number(uiNu);
@@ -3718,8 +3718,18 @@ function validateStep(s) {
       if (s === 1) {
           let pName = document.getElementById('projectName');
           if (pName && !pName.value.trim()) { toast("Please enter a Project Name."); return false; }
-          if (!document.getElementById('inputTriangles').value || !document.getElementById('inputNodes').value) {
+          let valT = document.getElementById('inputTriangles')?.value;
+          let valN = document.getElementById('inputNodes')?.value;
+          if (!valT || !valN) {
               toast("Please fill in both Number of Triangles and Total Nodes.");
+              return false;
+          }
+          if (valT.includes('.') || !Number.isInteger(Number(valT)) || Number(valT) < 1) {
+              toast("Number of Triangles must be a positive integer (e.g. 1, 2, 3).");
+              return false;
+          }
+          if (valN.includes('.') || !Number.isInteger(Number(valN)) || Number(valN) < 3) {
+              toast("Total Number of Nodes must be an integer of at least 3.");
               return false;
           }
       }
