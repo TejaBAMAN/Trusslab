@@ -734,10 +734,7 @@ select:disabled { opacity: 0.7 !important; cursor: not-allowed !important; }
       <div>
         <h2 style="margin-bottom: 4px;">Execute Analysis</h2>
         <div class="sub">Computes global stiffness matrix [K], nodal displacements {U}, support reactions, and element internal forces.</div>
-        <div id="step6EngineBadge" style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; background: #f8fafc; border: 1px solid var(--line); font-size: 12px; margin-top: 8px;">
-          <span id="step6EngineDot" style="width: 8px; height: 8px; border-radius: 50%; background: #94a3b8;"></span>
-          <span id="step6EngineText">Checking Engine Status...</span>
-        </div>
+
       </div>
     </div>
     <button class="btn primary run-btn" id="solveBtn" onclick="solve()">Run Solver</button>
@@ -1120,16 +1117,12 @@ async function configureBackend() {
 async function checkBackendStatus(showToast = false) {
     const dot = document.getElementById('backendStatusDot');
     const text = document.getElementById('backendStatusText');
-    const badge = document.getElementById('backendStatusBadge');
-    const s6Dot = document.getElementById('step6EngineDot');
-    const s6Text = document.getElementById('step6EngineText');
+
 
     const updateUI = (color, label, bg, toastText) => {
         if (dot) dot.style.background = color;
         if (text) text.textContent = label;
-        if (badge) badge.style.background = bg;
-        if (s6Dot) s6Dot.style.background = color;
-        if (s6Text) s6Text.textContent = label;
+
         if (showToast && toastText) toast(toastText);
     };
 
