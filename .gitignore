@@ -1,0 +1,24 @@
+# Python & PyInstaller
+build/
+dist/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Operating system files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs & temp files
+*.log
+*.tmp
+temp_*
+scratch/
+rendered_report.html
+debug_solve.py
+inspect_rendered_report.py
+
+# Julia cache
+julia_backend/.julia/

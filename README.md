@@ -57,12 +57,13 @@ Contains the raw tools required to compile the Android app.
 *   🌐 **`index.html`**: The single, monolithic UI file. It contains all HTML, CSS, and Javascript.
     *   `newProject()` / `showHome()`: Cleans the UI slate to start a new bridge or return to the main menu.
     *   `saveProject()` / `editProject()`: Manages saving drafts to the browser's hidden memory and loading them back.
-    *   `go(step)`: The traffic cop. It moves you sequentially from Step 1 through Step 7.
-    *   `validateStep(s)`: The security guard. Blocks you from moving to the next step if you draw an impossible triangle or forget a material property.
+    *   `go(step)`: The traffic cop. It moves you sequentially through the 7-step guided wizard (including Step 4 Cross-Section Profiles & Buckling Restraints).
+    *   `validateStep(s)`: The security guard. Blocks you from moving to the next step if you draw an impossible triangle, enter invalid section dimensions, or forget a boundary support.
     *   `buildTrianglesUI()`: Dynamically creates the HTML input boxes based on how many triangles you asked for.
     *   `generateGeometry()`: Takes your lengths (e.g., "5 meters") and uses the Law of Cosines to calculate exact X and Y coordinates on a graph.
     *   `drawGeometry()` / `drawTruss()` / `drawLoad()`: The artists. They physically paint the blue structural lines, nodes, and red arrows onto the HTML5 `<canvas>`.
-    *   `solve()`: Packages up your final drawing into a JSON text string and fires it off to the Math Brain.
+    *   `solve()`: Packages up your drawing and per-member section properties into JSON and invokes the Julia Backend or built-in DSM solver.
+    *   `generateReportHTML()` / `exportPDF()`: Automatically formats and exports a professional 4-page A4 engineering calculation report with high-res vector canvas diagrams and full member buckling schedules.
 
 ---
 
@@ -71,11 +72,11 @@ Contains the raw tools required to compile the Android app.
 The scientific physics engine, split into specific modules.
 
 🧠 **`solver.jl`**
-*   `solve_truss_fem()`: The ultimate manager function. It receives the bridge from the UI, delegates the math to the functions below, and returns the final answers.
+*   `solve_truss_fem()`: Solves $[K]\{U\} = \{F\}$ for displacements, extracts axial member forces and stresses, and performs **Dual-Axis Principal Euler Buckling checks** ($P_{cr,u}, P_{cr,v}, P_{cr,gov}$) with restraint factor presets ($k=1.0, 0.5, 0.7, 2.0$) and slenderness evaluation.
 
 🏗️ **`assembly.jl`**
-*   `assemble_global_stiffness()`: Looks at every single steel beam and mathematically glues them together into one giant interconnected puzzle (the Global Stiffness Matrix [K]).
-*   `assemble_global_load_vector()`: Gathers all the weights/forces you applied and puts them into a single mathematical list [F].
+*   `assemble_global_stiffness()`: Assembles the global stiffness matrix $[K]$ supporting **heterogeneous member cross-sections** ($A_i$ per member).
+*   `assemble_global_load_vector()`: Gathers applied nodal forces and calculates individual member gravitational dead loads ($w_i = \rho A_i L_i g$) into $[F]$.
 
 📐 **`stiffness.jl`**
 *   `calculate_local_stiffness()`: Calculates exactly how stiff a single steel beam is natively (EA/L).
@@ -86,11 +87,12 @@ The scientific physics engine, split into specific modules.
 *   `identify_dofs()`: Finds which nodes are bolted to the ground (Pins/Rollers) and locks those specific X/Y directions so the bridge doesn't float away.
 
 🗣️ **`communication.jl`**
-*   `handle_request_json()` & `parse_and_process()`: Translates the raw text JSON received from the Screen into strict Julia variables.
+*   `handle_request_json()` & `parse_and_process()`: Translates the raw text JSON received from the Screen into strict Julia variables (including heterogeneous `member_properties`).
 *   `dict_to_triangles()`, `dict_to_supports()`, `dict_to_loads()`: Maps the parsed text into physical structural objects.
 
 🧩 **`elements.jl`**
 *   `generate_unique_elements()`: Algorithmically scans adjacent triangles and deletes duplicate edges, finding the true number of unique steel beams.
+*   **Parametric Cross-Section Engine**: Calculates area $A$, principal moments of inertia ($I_u, I_v$), and radius of gyration for 9 structural shapes (Solid Circle, Pipe, Rectangle, Square, RHS, SHS, I/H-Beam, T-Section, Angle/Channel, plus custom/tabulated entries) using the parallel-axis theorem and Mohr's circle.
 
 🗺️ **`geometry.jl`**
 *   `calculate_triangle_angles()` & `distance_2d()`: Performs heavy trigonometry to double-check angles and distances.
