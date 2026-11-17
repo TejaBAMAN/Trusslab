@@ -336,8 +336,152 @@ println("==================================================")
         @test contains(res_unstable.error_message, "Insufficient supports") || contains(res_unstable.error_message, "Rigid body")
     end
 
+    # ----------------------------------------------------
+    # Test 13: 9-Shape Cross-Section Library & Principal Moments
+    # ----------------------------------------------------
+    @testset "Test 13: Cross-Section Geometry Library" begin
+        # Benchmark 1: Solid Circle D = 20 mm (0.02 m)
+        c1 = compute_solid_circle(0.02)
+        @test isapprox(c1.A, 100.0 * pi * 1e-6; atol=1e-12)
+        @test isapprox(c1.Ix, 2500.0 * pi * 1e-12; atol=1e-15)
+        @test isapprox(c1.Iy, 2500.0 * pi * 1e-12; atol=1e-15)
+
+        # Benchmark 2: Solid Rectangle b = 20 mm, h = 40 mm
+        r1 = compute_solid_rectangle(0.02, 0.04)
+        @test isapprox(r1.A, 800.0 * 1e-6; atol=1e-12)
+        @test isapprox(r1.Ix, 106666.6666667 * 1e-12; atol=1e-14)
+        @test isapprox(r1.Iy, 26666.6666667 * 1e-12; atol=1e-14)
+        # Swapping b and h swaps Ix and Iy while preserving A
+        r2 = compute_solid_rectangle(0.04, 0.02)
+        @test isapprox(r2.A, r1.A; atol=1e-12)
+        @test isapprox(r2.Ix, r1.Iy; atol=1e-14)
+        @test isapprox(r2.Iy, r1.Ix; atol=1e-14)
+
+        # Benchmark 3: Circular Hollow Section D = 40 mm, d = 30 mm
+        chs = compute_hollow_circle(0.04, 0.03)
+        @test isapprox(chs.A, 175.0 * pi * 1e-6; atol=1e-12)
+        @test isapprox(chs.Ix, 27343.75 * pi * 1e-12; atol=1e-14)
+        # Mode with wall thickness t = 5 mm gives identical results
+        chs_t = compute_hollow_circle(0.04, 0.005; is_thickness=true)
+        @test isapprox(chs_t.A, chs.A; atol=1e-12)
+        @test isapprox(chs_t.Ix, chs.Ix; atol=1e-14)
+
+        # Benchmark 4: Rectangular Hollow Section B = 40 mm, H = 60 mm, t = 4 mm
+        rhs = compute_rhs(0.04, 0.06, 0.004)
+        @test isapprox(rhs.A, 736.0 * 1e-6; atol=1e-12)
+        @test isapprox(rhs.Ix, 345045.3333333 * 1e-12; atol=1e-14)
+        @test isapprox(rhs.Iy, 178005.3333333 * 1e-12; atol=1e-14)
+
+        # Benchmark 5: Unsymmetric L-Angle with nonzero Ixy
+        ang = compute_angle_section(0.05, 0.05, 0.005, 0.005)
+        @test isapprox(ang.A, 475.0 * 1e-6; atol=1e-12)
+        @test ang.Ixy != 0.0
+        # Crucial check: Imin is strictly less than min(Ix, Iy) because Ixy != 0
+        @test ang.Imin < min(ang.Ix, ang.Iy)
+        @test isapprox(ang.Imin, 45890.8991 * 1e-12; atol=1e-14)
+        @test isapprox(ang.Imax, 179114.5833 * 1e-12; atol=1e-14)
+
+        # Benchmark 6: Symmetric I-Section
+        ib = compute_i_section(0.10, 0.10, 0.006, 0.008)
+        @test isapprox(ib.A, 2104.0 * 1e-6; atol=1e-12)
+        @test isapprox(ib.Ix, 3690485.3333333 * 1e-12; atol=1e-14)
+        @test isapprox(ib.Iy, 1334845.3333333 * 1e-12; atol=1e-14)
+
+        # Benchmark 7: Custom Section validation
+        cust_valid = compute_custom_section(A=0.001, Ix=1e-6, Iy=1e-6, Ixy=2e-7)
+        @test cust_valid.A == 0.001
+        @test cust_valid.Imin > 0.0
+        # Invalid non-positive-definite tensor throws error
+        @test_throws ErrorException compute_custom_section(A=0.001, Ix=1e-6, Iy=1e-6, Ixy=2e-6)
+
+        # Validation errors on invalid dimensions
+        @test_throws ErrorException compute_solid_circle(-0.02)
+        @test_throws ErrorException compute_hollow_circle(0.03, 0.04) # d > D
+        @test_throws ErrorException compute_rhs(0.04, 0.06, 0.025)   # 2t > B
+        @test_throws ErrorException compute_i_section(0.05, 0.02, 0.01, 0.015) # 2tf > H
+    end
+
+    # ----------------------------------------------------
+    # Test 14: Two-Bar Series Heterogeneous Area Fixture
+    # ----------------------------------------------------
+    @testset "Test 14: Heterogeneous Series Bar Fixture" begin
+        # Analytical fixture: 2 bars in series, L1=1m, L2=1m, E=200 GPa
+        # A1 = 100 mm^2 (1e-4 m^2), A2 = 200 mm^2 (2e-4 m^2)
+        # Nodes: 1 (0,0), 2 (1,0), 3 (2,0)
+        # Nodal restraints: all 3 fixed in Y; node 1 fixed in X.
+        # Load: +10 kN at node 3 in X.
+        coords = Dict(1 => [0.0, 0.0], 2 => [1.0, 0.0], 3 => [2.0, 0.0])
+        elements = [
+            Element(1, 1, 2, 1.0, 1.0, 0.0, 0.0, 0.0),
+            Element(2, 2, 3, 1.0, 1.0, 0.0, 0.0, 0.0)
+        ]
+        supports = [
+            SupportDef(1, "pinned", true, true),
+            SupportDef(2, "roller_x", false, true),
+            SupportDef(3, "roller_x", false, true)
+        ]
+        loads = [LoadDef(3, 10000.0, 0.0)]
+        
+        sec1 = compute_custom_section(A=100.0 * 1e-6, Iu=1e-8, Iv=1e-8, name="Bar 1")
+        sec2 = compute_custom_section(A=200.0 * 1e-6, Iu=1e-8, Iv=1e-8, name="Bar 2")
+        bck1 = BucklingRestraint("pinned_pinned", "pinned_pinned", 1.0, 1.0, 1.0, 1.0, true)
+        bck2 = BucklingRestraint("pinned_pinned", "pinned_pinned", 1.0, 1.0, 1.0, 1.0, true)
+        
+        configs = [
+            MemberConfig(1, sec1, bck1, 200e9, 7850.0),
+            MemberConfig(2, sec2, bck2, 200e9, 7850.0)
+        ]
+        
+        res = solve_truss_fem(3, elements, coords, 200e9, 100e-6, supports, loads; member_configs=configs)
+        @test res.success == true
+        
+        # Exact analytical values:
+        # u2x = P * L1 / (E * A1) = 10000 * 1 / (200e9 * 1e-4) = 0.0005 m
+        # u3x = u2x + P * L2 / (E * A2) = 0.0005 + 10000 * 1 / (200e9 * 2e-4) = 0.00075 m
+        u2 = res.displacements[2]
+        u3 = res.displacements[3]
+        @test isapprox(u2.ux, 0.0005; atol=1e-9)
+        @test isapprox(u3.ux, 0.00075; atol=1e-9)
+        
+        # Forces and stresses:
+        e1 = res.elements[1]
+        e2 = res.elements[2]
+        @test isapprox(e1.axial_force, 10000.0; atol=1e-4)
+        @test isapprox(e2.axial_force, 10000.0; atol=1e-4)
+        @test isapprox(e1.stress, 100.0 * 1e6; atol=1e-3) # 100 MPa
+        @test isapprox(e2.stress, 50.0 * 1e6; atol=1e-3)  # 50 MPa
+    end
+
+    # ----------------------------------------------------
+    # Test 15: Dual-Axis Buckling Ratios & Sensitivity
+    # ----------------------------------------------------
+    @testset "Test 15: Dual-Axis Buckling Ratios & Sensitivity" begin
+        # 1. Pcr ratio tests for effective length factor k:
+        E = 200e9
+        I = 1e-8
+        L = 2.0
+        # Reference k=1: Pcr = pi^2 * E * I / L^2
+        pcr_ref = (pi^2 * E * I) / (1.0 * L)^2
+        # Fixed-Fixed k=0.5: capacity is exactly 4x
+        pcr_k05 = (pi^2 * E * I) / (0.5 * L)^2
+        @test isapprox(pcr_k05, 4.0 * pcr_ref; atol=1e-6)
+        # Cantilever k=2.0: capacity is exactly 0.25x
+        pcr_k20 = (pi^2 * E * I) / (2.0 * L)^2
+        @test isapprox(pcr_k20, 0.25 * pcr_ref; atol=1e-6)
+        # Doubling unbraced length L -> 0.25x capacity
+        pcr_2L = (pi^2 * E * I) / (1.0 * (2.0 * L))^2
+        @test isapprox(pcr_2L, 0.25 * pcr_ref; atol=1e-6)
+
+        # 2. Case where larger inertia still governs because ku*Lu is sufficiently larger:
+        # Iu = 2e-8 (larger), Iv = 1e-8 (smaller)
+        # ku*Lu = 4.0 m, kv*Lv = 1.0 m
+        pcr_u = (pi^2 * E * 2e-8) / (4.0^2) # ~ 1.2337e4 N
+        pcr_v = (pi^2 * E * 1e-8) / (1.0^2) # ~ 1.9739e5 N
+        @test pcr_u < pcr_v # Axis u has lower capacity despite having 2x larger inertia!
+    end
+
 end
 
 println("==================================================")
-println("ALL 12 TESTS PASSED SUCCESSFULLY!")
+println("ALL 15 TESTS PASSED SUCCESSFULLY!")
 println("==================================================")
