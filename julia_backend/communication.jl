@@ -1,5 +1,6 @@
 # julia_backend/communication.jl
 # JSON input/output communication layer for GUI and CLI integration
+# Supports per-member cross-section and dual-axis Euler buckling payloads.
 
 module Communication
 
@@ -102,7 +103,6 @@ function parse_and_process(req::AbstractDict)
             coords, history = reconstruct_geometry_from_triangles(num_nodes, triangles)
             elements = generate_unique_elements(triangles, coords)
             
-            # Format elements for JSON
             elem_list = [
                 Dict{String, Any}(
                     "id" => el.id,
@@ -116,7 +116,6 @@ function parse_and_process(req::AbstractDict)
                 ) for el in elements
             ]
             
-            # Format coordinates for JSON (keys as string for JSON compatibility)
             coords_dict = Dict{String, Vector{Float64}}(string(k) => v for (k, v) in coords)
             
             return Dict{String, Any}(
@@ -158,9 +157,70 @@ function parse_and_process(req::AbstractDict)
             include_self_weight = Bool(get(req, "include_self_weight", false))
             check_buckling = Bool(get(req, "check_buckling", false))
             
-            # 4. Solve FEM
+            # 4. Optional Per-Member Section & Buckling Configurations
+            member_configs = MemberConfig[]
+            raw_members = get(req, "member_properties", get(req, "member_configs", Any[]))
+            
+            if !isempty(raw_members)
+                for (idx, el) in enumerate(elements)
+                    # Find matching configuration by ID or index
+                    m_data = nothing
+                    for rm in raw_members
+                        if get(rm, "id", get(rm, "element_id", -1)) == el.id
+                            m_data = rm
+                            break
+                        end
+                    end
+                    if m_data === nothing && idx <= length(raw_members)
+                        m_data = raw_members[idx]
+                    end
+                    
+                    if m_data !== nothing
+                        sec_dict = get(m_data, "section", Dict{String, Any}())
+                        shape = get(sec_dict, "shape", "solid_circle")
+                        sec_name = get(sec_dict, "name", "Member $(el.id) Section")
+                        
+                        raw_params = get(sec_dict, "params", Dict{String, Any}())
+                        params = Dict{String, Float64}()
+                        for (pk, pv) in raw_params
+                            params[string(pk)] = Float64(pv)
+                        end
+                        if !haskey(params, "A") && haskey(m_data, "A")
+                            params["A"] = Float64(m_data["A"])
+                        end
+                        if isempty(params)
+                            params["D"] = sqrt(4.0 * A / pi)
+                        end
+                        
+                        sec = compute_section_properties(shape, params; name=sec_name)
+                        
+                        bck_dict = get(m_data, "buckling", Dict{String, Any}())
+                        preset_u = String(get(bck_dict, "preset_u", "pinned_pinned"))
+                        preset_v = String(get(bck_dict, "preset_v", "pinned_pinned"))
+                        ku = Float64(get(bck_dict, "ku", 1.0))
+                        kv = Float64(get(bck_dict, "kv", 1.0))
+                        Lu = Float64(get(bck_dict, "Lu", el.length))
+                        Lv = Float64(get(bck_dict, "Lv", el.length))
+                        configured = Bool(get(bck_dict, "configured", check_buckling))
+                        
+                        bck = BucklingRestraint(preset_u, preset_v, ku, kv, Lu, Lv, configured)
+                        m_E = Float64(get(m_data, "E", E))
+                        m_density = Float64(get(m_data, "density", density))
+                        
+                        push!(member_configs, MemberConfig(el.id, sec, bck, m_E, m_density))
+                    else
+                        # Default fallback for this element
+                        default_sec = compute_solid_circle(sqrt(4.0 * A / pi); name="Default Section")
+                        default_bck = BucklingRestraint("pinned_pinned", "pinned_pinned", 1.0, 1.0, el.length, el.length, check_buckling)
+                        push!(member_configs, MemberConfig(el.id, default_sec, default_bck, E, density))
+                    end
+                end
+            end
+            
+            # 5. Solve FEM
             fem_result = solve_truss_fem(
                 num_nodes, elements, coords, E, A, supports, loads;
+                member_configs=member_configs,
                 def_scale=def_scale,
                 analysis_type=analysis_type,
                 formulation=formulation,
@@ -183,7 +243,7 @@ function parse_and_process(req::AbstractDict)
                 )
             end
             
-            # 5. Package results
+            # 6. Package results
             coords_dict = Dict{String, Vector{Float64}}(string(k) => v for (k, v) in coords)
             def_coords_dict = Dict{String, Vector{Float64}}(string(k) => v for (k, v) in fem_result.deformed_coords)
             
@@ -202,6 +262,29 @@ function parse_and_process(req::AbstractDict)
                     "axial_force" => el.axial_force,
                     "state" => el.state
                 ) for el in fem_result.elements
+            ]
+            
+            buckling_list = [
+                Dict{String, Any}(
+                    "id" => b.id,
+                    "section_name" => b.section_name,
+                    "section_shape" => b.section_shape,
+                    "A" => b.A,
+                    "Iu" => b.Iu,
+                    "Iv" => b.Iv,
+                    "ku" => b.ku,
+                    "kv" => b.kv,
+                    "Lu" => b.Lu,
+                    "Lv" => b.Lv,
+                    "p_cr_u" => b.p_cr_u,
+                    "p_cr_v" => b.p_cr_v,
+                    "p_cr_gov" => b.p_cr_gov,
+                    "governing_axis" => b.governing_axis,
+                    "axial_force" => b.axial_force,
+                    "utilisation" => b.utilisation,
+                    "status" => b.status,
+                    "configured" => b.configured
+                ) for b in fem_result.buckling_results
             ]
             
             disp_list = [
@@ -257,6 +340,7 @@ function parse_and_process(req::AbstractDict)
                 "coordinates" => coords_dict,
                 "deformed_coordinates" => def_coords_dict,
                 "elements" => elem_list,
+                "buckling_results" => buckling_list,
                 "displacements" => disp_list,
                 "reactions" => react_list,
                 "summary" => summary_dict,
@@ -266,7 +350,6 @@ function parse_and_process(req::AbstractDict)
             return Dict{String, Any}("success" => false, "error" => "Unknown action: $action")
         end
     catch err
-        # Catch unexpected errors without crashing
         return Dict{String, Any}(
             "success" => false,
             "error" => "Julia Engine Exception: $(err)",

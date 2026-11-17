@@ -1,5 +1,6 @@
 # julia_backend/assembly.jl
 # Assembly of global stiffness matrix [K] and global load vector {F}
+# Supports heterogeneous per-member stiffness and material properties.
 
 module Assembly
 
@@ -18,19 +19,28 @@ end
 
 """
     assemble_global_stiffness(num_nodes::Int, elements::Vector{Element}, E::Float64, A::Float64) -> Matrix{Float64}
-
-Assembles the (2*num_nodes) x (2*num_nodes) global stiffness matrix [K].
+Legacy backward-compatible overload for uniform material E and area A.
 """
 function assemble_global_stiffness(num_nodes::Int, elements::Vector{Element}, E::Float64, A::Float64)
+    Es = fill(E, length(elements))
+    As = fill(A, length(elements))
+    return assemble_global_stiffness(num_nodes, elements, Es, As)
+end
+
+"""
+    assemble_global_stiffness(num_nodes::Int, elements::Vector{Element}, Es::Vector{Float64}, As::Vector{Float64}) -> Matrix{Float64}
+Assembles the (2*num_nodes) x (2*num_nodes) global stiffness matrix [K] supporting heterogeneous member areas and moduli.
+"""
+function assemble_global_stiffness(num_nodes::Int, elements::Vector{Element}, Es::Vector{Float64}, As::Vector{Float64})
     total_dofs = 2 * num_nodes
     K = zeros(Float64, total_dofs, total_dofs)
     
-    for el in elements
+    for (idx, el) in enumerate(elements)
         dof_ix, dof_iy = get_node_dofs(el.node_i)
         dof_jx, dof_jy = get_node_dofs(el.node_j)
         el_dofs = [dof_ix, dof_iy, dof_jx, dof_jy]
         
-        ke = calculate_element_stiffness(E, A, el.length, el.c, el.s)
+        ke = calculate_element_stiffness(Es[idx], As[idx], el.length, el.c, el.s)
         
         for a in 1:4
             for b in 1:4
@@ -44,7 +54,6 @@ end
 
 """
     assemble_global_load_vector(num_nodes::Int, loads::Vector{LoadDef}) -> Vector{Float64}
-
 Assembles the (2*num_nodes) global force vector {F}.
 """
 function assemble_global_load_vector(num_nodes::Int, loads::Vector{LoadDef})

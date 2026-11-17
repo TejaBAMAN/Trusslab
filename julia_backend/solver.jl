@@ -1,5 +1,6 @@
 # julia_backend/solver.jl
 # Finite Element Direct Stiffness solver for 2D trusses
+# Supports heterogeneous per-member section properties and dual-axis Euler buckling verification.
 
 module Solver
 
@@ -15,11 +16,14 @@ using ..Results
 export solve_truss_fem
 
 """
-    solve_truss_fem(num_nodes::Int, elements::Vector{Element}, coords::Dict{Int, Vector{Float64}}, E::Float64, A::Float64, supports::Vector{SupportDef}, loads::Vector{LoadDef}; def_scale::Float64=100.0, analysis_type::String="linear_elastic", formulation::String="dsm", density::Float64=7850.0) -> FullAnalysisResult
+    solve_truss_fem(num_nodes::Int, elements::Vector{Element}, coords::Dict{Int, Vector{Float64}}, E::Float64, A::Float64, supports::Vector{SupportDef}, loads::Vector{LoadDef}; ...) -> FullAnalysisResult
 
-Solves the 2D truss using the Finite Element Direct Stiffness Method. Supports:
+Solves the 2D truss using the Finite Element Direct Stiffness Method.
+Supports:
 - Formulations: "dsm", "cholesky", "lu", "qr"
 - Analysis Types: "linear_elastic", "second_order", "buckling", "gravity"
+- Heterogeneous per-member properties via `member_configs` parameter
+- Dual-axis Euler elastic buckling verification about principal u and v axes
 """
 function solve_truss_fem(
     num_nodes::Int,
@@ -29,6 +33,7 @@ function solve_truss_fem(
     A::Float64,
     supports::Vector{SupportDef},
     loads::Vector{LoadDef};
+    member_configs::Vector{MemberConfig}=MemberConfig[],
     def_scale::Float64=100.0,
     analysis_type::String="linear_elastic",
     formulation::String="dsm",
@@ -41,22 +46,42 @@ function solve_truss_fem(
     eval_buckling = check_buckling || (analysis_type == "buckling")
     base_analysis = (analysis_type == "second_order") ? "second_order" : "linear_elastic"
 
+    num_elems = length(elements)
+    
+    # Prepare per-member properties
+    cfgs = MemberConfig[]
+    if length(member_configs) == num_elems
+        cfgs = member_configs
+    else
+        # Fall back to uniform scalar E, A, density with default circular section and pinned-pinned buckling
+        default_sec = compute_solid_circle(sqrt(4.0 * A / pi); name="Default Circular Bar")
+        for el in elements
+            push!(cfgs, MemberConfig(el.id, default_sec, BucklingRestraint("pinned_pinned", "pinned_pinned", 1.0, 1.0, el.length, el.length, eval_buckling), E, density))
+        end
+    end
+
+    Es = [c.E for c in cfgs]
+    As = [c.section.A for c in cfgs]
+    densities = [c.density for c in cfgs]
+
     # Step 1: Assemble Global Stiffness Matrix and Force Vector
-    K = assemble_global_stiffness(num_nodes, elements, E, A)
+    K = assemble_global_stiffness(num_nodes, elements, Es, As)
     F = assemble_global_load_vector(num_nodes, loads)
     
-    # Gravitational Dead Load inclusion if requested
+    # Gravitational Dead Load inclusion if requested (using individual member areas & densities)
     total_dead_load = 0.0
-    if use_gravity && density > 0.0
+    if use_gravity
         g = 9.80665 # m/s^2
-        for el in elements
-            el_mass = density * A * el.length
-            el_weight = el_mass * g
-            total_dead_load += el_weight
-            dof_iy = 2 * el.node_i
-            dof_jy = 2 * el.node_j
-            F[dof_iy] -= 0.5 * el_weight
-            F[dof_jy] -= 0.5 * el_weight
+        for (idx, el) in enumerate(elements)
+            if densities[idx] > 0.0 && As[idx] > 0.0
+                el_mass = densities[idx] * As[idx] * el.length
+                el_weight = el_mass * g
+                total_dead_load += el_weight
+                dof_iy = 2 * el.node_i
+                dof_jy = 2 * el.node_j
+                F[dof_iy] -= 0.5 * el_weight
+                F[dof_jy] -= 0.5 * el_weight
+            end
         end
     end
     
@@ -74,7 +99,8 @@ function solve_truss_fem(
             SupportReaction[],
             ElementResult[],
             AnalysisSummary(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, "Failed Stability Check"),
-            coords
+            coords,
+            ElementBucklingResult[]
         )
     end
     
@@ -115,7 +141,8 @@ function solve_truss_fem(
                 SupportReaction[],
                 ElementResult[],
                 AnalysisSummary(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, "Solver Factorization Error"),
-                coords
+                coords,
+                ElementBucklingResult[]
             )
         end
     end
@@ -136,7 +163,7 @@ function solve_truss_fem(
                 L = hypot(dx, dy)
                 push!(elems_def, Element(el.id, el.node_i, el.node_j, L, dx/L, dy/L, atan(dy, dx), rad2deg(atan(dy, dx))))
             end
-            K2 = assemble_global_stiffness(num_nodes, elems_def, E, A)
+            K2 = assemble_global_stiffness(num_nodes, elems_def, Es, As)
             K2_ff = K2[free_dofs, free_dofs]
             U2_f = K2_ff \ F[free_dofs]
             if !any(isnan.(U2_f)) && !any(isinf.(U2_f))
@@ -169,12 +196,11 @@ function solve_truss_fem(
         push!(reactions, SupportReaction(s.node, rx, ry, hypot(rx, ry)))
     end
     
-    # Step 6: Calculate Element Elongation, Strain, Stress, and Axial Force
+    # Step 6: Calculate Element Elongation, Strain, Stress, Axial Force and Dual-Axis Buckling
     element_results = ElementResult[]
-    # Euler Buckling section moment of inertia for equivalent circular section: I = A^2 / (4*pi)
-    I_eff = (A^2) / (4.0 * pi)
+    buckling_results = ElementBucklingResult[]
     
-    for el in elements
+    for (idx, el) in enumerate(elements)
         ni = el.node_i
         nj = el.node_j
         
@@ -193,25 +219,61 @@ function solve_truss_fem(
         # Elongation: Delta L = c * (u_jx - u_ix) + s * (u_jy - u_iy)
         delta_L = c * (ujx - uix) + s * (ujy - uiy)
         strain = delta_L / L
-        stress = E * strain
-        axial_force = stress * A
+        axial_force = delta_L * (Es[idx] * As[idx] / L)
+        stress = axial_force / As[idx]
         
-        state = if axial_force > 1e-6
-            "Tension"
+        # Dual-Axis Euler Buckling Verification
+        cfg = cfgs[idx]
+        sec = cfg.section
+        bck = cfg.buckling
+        
+        Iu = sec.Iu
+        Iv = sec.Iv
+        ku = bck.ku > 0.0 ? bck.ku : 1.0
+        kv = bck.kv > 0.0 ? bck.kv : 1.0
+        Lu = bck.Lu > 0.0 ? bck.Lu : L
+        Lv = bck.Lv > 0.0 ? bck.Lv : L
+        
+        p_cr_u = (pi^2 * Es[idx] * Iu) / ((ku * Lu)^2)
+        p_cr_v = (pi^2 * Es[idx] * Iv) / ((kv * Lv)^2)
+        p_cr_gov = min(p_cr_u, p_cr_v)
+        gov_axis = (p_cr_u <= p_cr_v) ? "u" : "v"
+        
+        util = 0.0
+        status = "Not Configured"
+        state_str = "Zero Force"
+        
+        if axial_force > 1e-6
+            state_str = "Tension"
+            status = "Tension (N/A)"
+            util = 0.0
         elseif axial_force < -1e-6
-            if eval_buckling
-                p_cr = (pi^2 * E * I_eff) / (L^2)
-                util = abs(axial_force) / p_cr
-                util >= 1.0 ? @sprintf("Buckled (%.0f%% Pcr)", util * 100) : @sprintf("Compression (%.0f%% Pcr)", util * 100)
+            if eval_buckling && bck.configured
+                util = abs(axial_force) / p_cr_gov
+                if util >= 1.0
+                    status = "Buckled"
+                    state_str = @sprintf("Buckled (%.0f%% Pcr - %s)", util * 100, gov_axis)
+                else
+                    status = "Safe"
+                    state_str = @sprintf("Compression (%.0f%% Pcr - %s)", util * 100, gov_axis)
+                end
             else
-                "Compression"
+                status = bck.configured ? "Safe" : "Not Configured"
+                state_str = "Compression"
             end
         else
-            "Zero Force"
+            state_str = "Zero Force"
+            status = "Zero Force (N/A)"
+            util = 0.0
         end
         
         push!(element_results, ElementResult(
-            el.id, ni, nj, L, c, s, el.angle_deg, delta_L, strain, stress, axial_force, state
+            el.id, ni, nj, L, c, s, el.angle_deg, delta_L, strain, stress, axial_force, state_str
+        ))
+        
+        push!(buckling_results, ElementBucklingResult(
+            el.id, sec.name, sec.shape, As[idx], Iu, Iv, ku, kv, Lu, Lv,
+            p_cr_u, p_cr_v, p_cr_gov, gov_axis, axial_force, util, status, bck.configured
         ))
     end
     
@@ -220,7 +282,7 @@ function solve_truss_fem(
     total_fy = sum(ld.fy for ld in loads; init=0.0) - total_dead_load
     summary = generate_summary(displacements, element_results, reactions, total_fx, total_fy)
     
-    # Custom status augmentation based on analysis type and active options
+    # Status augmentation
     status_parts = String[]
     if base_analysis == "second_order"
         push!(status_parts, "Geometric Nonlinear (P-Delta)")
@@ -231,12 +293,13 @@ function solve_truss_fem(
         push!(status_parts, @sprintf("+ Dead Load (%.2f kN)", total_dead_load / 1000.0))
     end
     if eval_buckling
-        comp_elems = filter(e -> e.axial_force < -1e-6, element_results)
-        if !isempty(comp_elems)
-            min_lambda = minimum([((pi^2 * E * I_eff) / (e.length^2)) / abs(e.axial_force) for e in comp_elems])
-            push!(status_parts, @sprintf("• Buckling Checked (lambda_cr = %.2f×)", min_lambda))
+        configured_comp = filter(b -> b.axial_force < -1e-6 && b.configured, buckling_results)
+        if !isempty(configured_comp)
+            max_util = maximum([b.utilisation for b in configured_comp])
+            lambda_cr = max_util > 0 ? (1.0 / max_util) : Inf
+            push!(status_parts, @sprintf("• Dual-Axis Buckling (lambda_cr = %.2f×)", lambda_cr))
         else
-            push!(status_parts, "• Buckling Checked (No compression members)")
+            push!(status_parts, "• Buckling Checked (No active compression members)")
         end
     end
     
@@ -250,7 +313,6 @@ function solve_truss_fem(
         join(status_parts, " ")
     )
     
-    # Step 8: Deformed Coordinates
     deformed_coords = compute_deformed_coordinates(coords, displacements, def_scale)
     
     return FullAnalysisResult(
@@ -261,7 +323,8 @@ function solve_truss_fem(
         reactions,
         element_results,
         summary,
-        deformed_coords
+        deformed_coords,
+        buckling_results
     )
 end
 
