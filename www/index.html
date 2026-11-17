@@ -431,6 +431,21 @@ select {
 }
 select:disabled { opacity: 0.7 !important; cursor: not-allowed !important; }
 
+
+/* Step 4 Section & Buckling Engine Styles */
+.sec-badge { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px 16px; margin-top: 14px; }
+.sec-badge-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-top: 6px; }
+.sec-badge-item { font-size: 11.5px; color: var(--muted); }
+.sec-badge-item b { display: block; font-size: 14px; color: var(--blue-dark); font-weight: 700; margin-top: 2px; }
+.schedule-table-wrap { overflow-x: auto; margin-top: 12px; border: 1px solid #e2e8f0; border-radius: 8px; }
+.schedule-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
+.schedule-table th { background: #f1f5f9; color: var(--text); padding: 8px 10px; font-weight: 600; border-bottom: 1px solid #cbd5e1; white-space: nowrap; }
+.schedule-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; white-space: nowrap; color: #334155; }
+.schedule-table tr:hover { background: #f8fafc; }
+.schedule-table .override-pill { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10.5px; font-weight: 600; background: #e0f2fe; color: #0369a1; }
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+.modal-card { background: white; border-radius: 12px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); }
+
 </style>
 </head>
 <body>
@@ -565,26 +580,252 @@ select:disabled { opacity: 0.7 !important; cursor: not-allowed !important; }
 </section>
 
 <section id="page4" class="hidden">
-  <div class="page-head"><div class="eyebrow">Step 4 of 7</div><h1>Section Properties</h1><div class="sub">Assign material and sectional parameters for stiffness matrix assembly.</div></div>
-  <div class="grid">
+  <div class="page-head">
+    <div class="eyebrow">Step 4 of 7</div>
+    <h1>Section Properties &amp; Buckling Restraints</h1>
+    <div class="sub">Configure material properties, cross-section profiles (9 built-in shapes or custom), and dual-axis buckling effective lengths.</div>
+  </div>
+
+  <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 20px;">
+    <!-- Material Specification -->
     <div class="card">
       <h2>Material Specification</h2>
       <div class="form-grid">
-        <div><label>Material Preset</label><select><option>Structural Steel</option><option>High-Strength Concrete</option><option>Custom Isotropic</option></select></div>
-        <div><label>Young's Modulus (E)</label><input id="matE" value="" placeholder="e.g. 200" type="number" min="0" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(parseFloat(this.value)<0)this.value=0;"></div>
-        <div><label>Poisson's Ratio (ν)</label><input id="matNu" value="" placeholder="e.g. 0.30" type="number" step="0.01" min="0" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(parseFloat(this.value)<0)this.value=0;"></div>
-        <div><label>Density (ρ)</label><input id="matDensity" value="" placeholder="e.g. 7850" type="number" min="0" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(parseFloat(this.value)<0)this.value=0;"></div>
+        <div style="grid-column: 1 / -1;">
+          <label>Material Preset</label>
+          <select id="matPreset" onchange="onMaterialPresetChange()">
+            <option value="steel" selected>Structural Steel (E = 200 GPa, ρ = 7850 kg/m³)</option>
+            <option value="aluminum">Structural Aluminum (E = 69 GPa, ρ = 2700 kg/m³)</option>
+            <option value="titanium">Titanium Alloy (E = 114 GPa, ρ = 4430 kg/m³)</option>
+            <option value="concrete">High-Strength Concrete (E = 30 GPa, ρ = 2400 kg/m³)</option>
+            <option value="custom">Custom Isotropic Material</option>
+          </select>
+        </div>
+        <div>
+          <label>Young's Modulus (E) [GPa]</label>
+          <input id="matE" value="200" type="number" step="1" min="0.001" oninput="onMaterialInputChange()">
+        </div>
+        <div>
+          <label>Poisson's Ratio (ν)</label>
+          <input id="matNu" value="0.30" type="number" step="0.01" min="0" max="0.5" oninput="onMaterialInputChange()">
+        </div>
+        <div>
+          <label>Density (ρ) [kg/m³]</label>
+          <input id="matDensity" value="7850" type="number" step="10" min="0" oninput="onMaterialInputChange()">
+        </div>
+        <div>
+          <label>Yield Strength (fy) [MPa]</label>
+          <input id="matFy" value="250" type="number" step="5" min="0" oninput="onMaterialInputChange()">
+        </div>
       </div>
     </div>
+
+    <!-- Default Cross-Section Profile -->
     <div class="card">
-      <h2>Cross Section</h2>
-      <label>Area (A)</label><input id="matA" value="" placeholder="e.g. 500" type="number" min="0" onkeydown="if(event.key==='-')event.preventDefault();" oninput="if(parseFloat(this.value)<0)this.value=0;">
-      <label style="margin-top:16px">Area Unit</label><select><option>mm²</option><option>cm²</option><option>m²</option></select>
-      
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h2>Default Cross-Section</h2>
+        <span class="status valid" id="secStatusTag">Active Profile</span>
+      </div>
+      <div>
+        <label>Section Shape</label>
+        <select id="secShape" onchange="onSectionShapeChange()">
+          <option value="solid_circle" selected>Solid Circular Rod</option>
+          <option value="hollow_circle">Hollow Circular Tube / Pipe (CHS)</option>
+          <option value="solid_rectangle">Solid Rectangle</option>
+          <option value="solid_square">Solid Square</option>
+          <option value="rectangular_hollow">Rectangular Hollow Section (RHS)</option>
+          <option value="square_hollow">Square Hollow Section (SHS)</option>
+          <option value="i_section">Symmetric I / H Section</option>
+          <option value="tee_section">Built-up T-Section</option>
+          <option value="channel_section">Built-up Channel (C-Section)</option>
+          <option value="angle_section">Angle (L-Section - Equal/Unequal)</option>
+          <option value="custom">Custom / Tabulated Properties</option>
+        </select>
+      </div>
+
+      <!-- Dynamic Section Input Container -->
+      <div id="secParamsContainer" style="margin-top: 12px;"></div>
+
+      <!-- Live Calculated Section Badge -->
+      <div class="sec-badge" id="secBadge">
+        <div style="font-size: 11px; font-weight: 700; color: var(--blue); text-transform: uppercase; letter-spacing: 0.5px;">Computed Section Properties (SI)</div>
+        <div class="sec-badge-grid">
+          <div class="sec-badge-item">Area (A) <b id="secBadgeA">314.16 mm²</b></div>
+          <div class="sec-badge-item">Principal Iu <b id="secBadgeIu">7,854 mm⁴</b></div>
+          <div class="sec-badge-item">Principal Iv <b id="secBadgeIv">7,854 mm⁴</b></div>
+          <div class="sec-badge-item">Min Radius (r) <b id="secBadgeR">5.00 mm</b></div>
+          <div class="sec-badge-item">Linear Mass <b id="secBadgeMass">2.47 kg/m</b></div>
+        </div>
+      </div>
     </div>
   </div>
-  <div class="nav-buttons"><button class="btn" onclick="go(3)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Back</button><button class="btn primary" onclick="go(5)">Set Boundaries<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:6px"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button></div>
+
+  <!-- Buckling Restraints & Effective Lengths Card -->
+  <div class="card" style="margin-top: 20px;">
+    <h2>Buckling Restraints &amp; Unbraced Lengths (Default)</h2>
+    <div style="font-size: 12px; color: var(--muted); margin-bottom: 14px; line-height: 1.4;">
+      Euler elastic flexural buckling capacity about principal axes u and v: 
+      <code>P<sub>cr</sub> = π² · E · I / (k · L)²</code>. 
+      <i>Note: Open sections (angles, channels) can have torsional/flexural-torsional instability modes not covered by this ideal flexural check.</i>
+    </div>
+    
+    <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
+      <!-- Axis u -->
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px;">
+        <b style="font-size: 13px; color: var(--text);">Principal Axis u (Strong / Major)</b>
+        <div style="margin-top: 8px;">
+          <label>Restraint Condition (k<sub>u</sub>)</label>
+          <select id="bckPresetU" onchange="onBucklingPresetChange('u')">
+            <option value="pinned_pinned" selected>Pinned–Pinned (k = 1.0) — Lateral translation restrained</option>
+            <option value="fixed_fixed">Fixed–Fixed (k = 0.5) — Sidesway prevented</option>
+            <option value="fixed_pinned">Fixed–Pinned (k = 0.70) — Approximation of 0.699</option>
+            <option value="cantilever">Fixed–Free Cantilever (k = 2.0)</option>
+            <option value="custom">Custom Factor (User Defined)</option>
+          </select>
+        </div>
+        <div class="form-grid" style="margin-top: 8px;">
+          <div>
+            <label>Factor k<sub>u</sub></label>
+            <input id="bckKu" type="number" step="0.05" min="0.01" value="1.0" oninput="onBucklingFactorChange('u')">
+          </div>
+          <div>
+            <label>Unbraced Length L<sub>u</sub> [m]</label>
+            <input id="bckLu" type="text" value="Auto (Member Length L)" onchange="onBucklingLengthChange('u')">
+          </div>
+        </div>
+      </div>
+
+      <!-- Axis v -->
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px;">
+        <b style="font-size: 13px; color: var(--text);">Principal Axis v (Weak / Minor)</b>
+        <div style="margin-top: 8px;">
+          <label>Restraint Condition (k<sub>v</sub>)</label>
+          <select id="bckPresetV" onchange="onBucklingPresetChange('v')">
+            <option value="pinned_pinned" selected>Pinned–Pinned (k = 1.0) — Lateral translation restrained</option>
+            <option value="fixed_fixed">Fixed–Fixed (k = 0.5) — Sidesway prevented</option>
+            <option value="fixed_pinned">Fixed–Pinned (k = 0.70) — Approximation of 0.699</option>
+            <option value="cantilever">Fixed–Free Cantilever (k = 2.0)</option>
+            <option value="custom">Custom Factor (User Defined)</option>
+          </select>
+        </div>
+        <div class="form-grid" style="margin-top: 8px;">
+          <div>
+            <label>Factor k<sub>v</sub></label>
+            <input id="bckKv" type="number" step="0.05" min="0.01" value="1.0" oninput="onBucklingFactorChange('v')">
+          </div>
+          <div>
+            <label>Unbraced Length L<sub>v</sub> [m]</label>
+            <input id="bckLv" type="text" value="Auto (Member Length L)" onchange="onBucklingLengthChange('v')">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Member Properties Schedule Table -->
+  <div class="card" style="margin-top: 20px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+      <div>
+        <h2>Member Properties &amp; Buckling Schedule</h2>
+        <div class="sub">Individual member property assignments. Members inherit default section unless specifically overridden.</div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn small" onclick="applyDefaultSectionToAll()">Apply Default to All</button>
+      </div>
+    </div>
+
+    <div class="schedule-table-wrap">
+      <table class="schedule-table" id="memberScheduleTable">
+        <thead>
+          <tr>
+            <th>Member ID</th>
+            <th>Nodes</th>
+            <th>Length (m)</th>
+            <th>Section Profile</th>
+            <th>Area A (mm²)</th>
+            <th>I<sub>u</sub> (mm⁴)</th>
+            <th>I<sub>v</sub> (mm⁴)</th>
+            <th>k<sub>u</sub> · L<sub>u</sub> (m)</th>
+            <th>k<sub>v</sub> · L<sub>v</sub> (m)</th>
+            <th>Assignment</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="memberScheduleBody">
+          <tr><td colspan="11" style="text-align:center; padding:16px; color:var(--muted);">No elements defined yet. Complete Step 2 &amp; 3 geometry first.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Hidden compatibility inputs for existing scripts -->
+  <input type="hidden" id="matA" value="314.16">
+
+  <div class="nav-buttons">
+    <button class="btn" onclick="go(3)">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Back
+    </button>
+    <button class="btn primary" onclick="go(5)">Set Boundaries
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:6px"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    </button>
+  </div>
 </section>
+
+<!-- Member Override Modal -->
+<div id="memberOverrideModal" class="modal-overlay" style="display: none;">
+  <div class="modal-card">
+    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e2e8f0; padding-bottom:12px; margin-bottom:16px;">
+      <h2 id="overrideModalTitle" style="margin:0;">Override Member Section</h2>
+      <button class="btn small" onclick="closeMemberOverrideModal()">✕ Close</button>
+    </div>
+    <input type="hidden" id="overrideElemId" value="">
+    <div>
+      <label>Section Shape for this Member</label>
+      <select id="overrideShape" onchange="onOverrideShapeChange()">
+        <option value="inherit">Inherit Global Default Section</option>
+        <option value="solid_circle">Solid Circular Rod</option>
+        <option value="hollow_circle">Hollow Circular Tube / Pipe (CHS)</option>
+        <option value="solid_rectangle">Solid Rectangle</option>
+        <option value="solid_square">Solid Square</option>
+        <option value="rectangular_hollow">Rectangular Hollow Section (RHS)</option>
+        <option value="square_hollow">Square Hollow Section (SHS)</option>
+        <option value="i_section">Symmetric I / H Section</option>
+        <option value="tee_section">Built-up T-Section</option>
+        <option value="channel_section">Built-up Channel (C-Section)</option>
+        <option value="angle_section">Angle (L-Section - Equal/Unequal)</option>
+        <option value="custom">Custom / Tabulated Properties</option>
+      </select>
+    </div>
+    <div id="overrideParamsContainer" style="margin-top:14px;"></div>
+    
+    <div style="margin-top:16px; border-top:1px solid #e2e8f0; padding-top:14px;">
+      <b style="font-size:13px; color:var(--text); display:block; margin-bottom:8px;">Buckling Restraint Override</b>
+      <div class="form-grid">
+        <div>
+          <label>Axis u Factor (k<sub>u</sub>)</label>
+          <input id="overrideKu" type="number" step="0.05" min="0.01" value="1.0">
+        </div>
+        <div>
+          <label>Axis u Length L<sub>u</sub> [m] (0 = Auto)</label>
+          <input id="overrideLu" type="number" step="0.1" min="0" value="0">
+        </div>
+        <div>
+          <label>Axis v Factor (k<sub>v</sub>)</label>
+          <input id="overrideKv" type="number" step="0.05" min="0.01" value="1.0">
+        </div>
+        <div>
+          <label>Axis v Length L<sub>v</sub> [m] (0 = Auto)</label>
+          <input id="overrideLv" type="number" step="0.1" min="0" value="0">
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+      <button class="btn" onclick="closeMemberOverrideModal()">Cancel</button>
+      <button class="btn primary" onclick="saveMemberOverride()">Save Override</button>
+    </div>
+  </div>
+</div>
 
 <section id="page5" class="hidden">
   <div class="page-head">
@@ -801,6 +1042,597 @@ select:disabled { opacity: 0.7 !important; cursor: not-allowed !important; }
 <div id="toast" class="toast"></div>
 
 <script>
+
+// =============================================================================
+// TRUSSLAB CROSS-SECTION & DUAL-AXIS BUCKLING ENGINE
+// =============================================================================
+
+function calcSectionGeometryJS(shape, params) {
+    let s = (shape || 'solid_circle').toLowerCase().trim();
+    let res = {
+        name: params.name || shape,
+        shape: s,
+        params: Object.assign({}, params),
+        A: 0, Ix: 0, Iy: 0, Ixy: 0, Iu: 0, Iv: 0, Imin: 0, Imax: 0,
+        theta_p: 0, x_bar: 0, y_bar: 0, r_min: 0
+    };
+
+    if (s === 'solid_circle') {
+        let D_mm = Number(params.D) || 20;
+        let D = D_mm * 1e-3;
+        res.A = Math.PI * (D * D) / 4.0;
+        res.Ix = res.Iy = res.Iu = res.Iv = res.Imin = res.Imax = Math.PI * Math.pow(D, 4) / 64.0;
+        res.x_bar = res.y_bar = D / 2.0;
+    } else if (s === 'hollow_circle') {
+        let D_mm = Number(params.D) || 40;
+        let d_mm = (params.t !== undefined && params.t !== null && params.t !== '') 
+            ? (D_mm - 2 * Number(params.t)) 
+            : (Number(params.d) || 30);
+        let D = D_mm * 1e-3, d = d_mm * 1e-3;
+        if (d >= D) d = D * 0.75;
+        res.A = Math.PI * (D * D - d * d) / 4.0;
+        res.Ix = res.Iy = res.Iu = res.Iv = res.Imin = res.Imax = Math.PI * (Math.pow(D, 4) - Math.pow(d, 4)) / 64.0;
+        res.x_bar = res.y_bar = D / 2.0;
+    } else if (s === 'solid_rectangle') {
+        let b = (Number(params.b) || 20) * 1e-3;
+        let h = (Number(params.h) || 40) * 1e-3;
+        res.A = b * h;
+        res.Ix = (b * Math.pow(h, 3)) / 12.0;
+        res.Iy = (h * Math.pow(b, 3)) / 12.0;
+        res.Iu = res.Ix; res.Iv = res.Iy;
+        res.Imin = Math.min(res.Ix, res.Iy); res.Imax = Math.max(res.Ix, res.Iy);
+        res.x_bar = b / 2.0; res.y_bar = h / 2.0;
+    } else if (s === 'solid_square') {
+        let b = (Number(params.b) || 20) * 1e-3;
+        res.A = b * b;
+        res.Ix = res.Iy = res.Iu = res.Iv = res.Imin = res.Imax = Math.pow(b, 4) / 12.0;
+        res.x_bar = res.y_bar = b / 2.0;
+    } else if (s === 'rectangular_hollow') {
+        let B = (Number(params.B) || 40) * 1e-3;
+        let H = (Number(params.H) || 60) * 1e-3;
+        let t = (Number(params.t) || 4) * 1e-3;
+        if (2 * t >= B || 2 * t >= H) t = Math.min(B, H) * 0.1;
+        let b = B - 2 * t, h = H - 2 * t;
+        res.A = B * H - b * h;
+        res.Ix = (B * Math.pow(H, 3) - b * Math.pow(h, 3)) / 12.0;
+        res.Iy = (H * Math.pow(B, 3) - h * Math.pow(b, 3)) / 12.0;
+        res.Iu = res.Ix; res.Iv = res.Iy;
+        res.Imin = Math.min(res.Ix, res.Iy); res.Imax = Math.max(res.Ix, res.Iy);
+        res.x_bar = B / 2.0; res.y_bar = H / 2.0;
+    } else if (s === 'square_hollow') {
+        let B = (Number(params.B) || 40) * 1e-3;
+        let t = (Number(params.t) || 4) * 1e-3;
+        if (2 * t >= B) t = B * 0.1;
+        let b = B - 2 * t;
+        res.A = B * B - b * b;
+        res.Ix = res.Iy = res.Iu = res.Iv = res.Imin = res.Imax = (Math.pow(B, 4) - Math.pow(b, 4)) / 12.0;
+        res.x_bar = res.y_bar = B / 2.0;
+    } else if (s === 'i_section') {
+        let B = (Number(params.B) || 100) * 1e-3;
+        let H = (Number(params.H) || 100) * 1e-3;
+        let tw = (Number(params.tw) || 6) * 1e-3;
+        let tf = (Number(params.tf) || 8) * 1e-3;
+        if (2 * tf >= H) tf = H * 0.1;
+        if (tw >= B) tw = B * 0.1;
+        let hw = H - 2 * tf;
+        res.A = 2 * B * tf + tw * hw;
+        res.Ix = (B * Math.pow(H, 3) - (B - tw) * Math.pow(hw, 3)) / 12.0;
+        res.Iy = (2 * tf * Math.pow(B, 3) + hw * Math.pow(tw, 3)) / 12.0;
+        res.Iu = res.Ix; res.Iv = res.Iy;
+        res.Imin = Math.min(res.Ix, res.Iy); res.Imax = Math.max(res.Ix, res.Iy);
+        res.x_bar = B / 2.0; res.y_bar = H / 2.0;
+    } else if (s === 'tee_section') {
+        let B = (Number(params.B) || 100) * 1e-3;
+        let H = (Number(params.H) || 100) * 1e-3;
+        let tw = (Number(params.tw) || 6) * 1e-3;
+        let tf = (Number(params.tf) || 8) * 1e-3;
+        if (tf >= H) tf = H * 0.1;
+        let hw = H - tf;
+        let A1 = B * tf, y1 = H - tf / 2.0;
+        let A2 = tw * hw, y2 = hw / 2.0;
+        res.A = A1 + A2;
+        res.y_bar = (A1 * y1 + A2 * y2) / res.A;
+        res.x_bar = 0.0;
+        res.Ix = (B * Math.pow(tf, 3) / 12.0 + A1 * Math.pow(y1 - res.y_bar, 2)) +
+                 (tw * Math.pow(hw, 3) / 12.0 + A2 * Math.pow(y2 - res.y_bar, 2));
+        res.Iy = (tf * Math.pow(B, 3) + hw * Math.pow(tw, 3)) / 12.0;
+        res.Iu = res.Ix; res.Iv = res.Iy;
+        res.Imin = Math.min(res.Ix, res.Iy); res.Imax = Math.max(res.Ix, res.Iy);
+    } else if (s === 'channel_section') {
+        let B = (Number(params.B) || 50) * 1e-3;
+        let H = (Number(params.H) || 100) * 1e-3;
+        let tw = (Number(params.tw) || 5) * 1e-3;
+        let tf = (Number(params.tf) || 6) * 1e-3;
+        if (2 * tf >= H) tf = H * 0.1;
+        let hw = H - 2 * tf;
+        let Aw = tw * hw, xw = tw / 2.0, yw = H / 2.0;
+        let Af = B * tf, xft = B / 2.0, yft = H - tf / 2.0;
+        res.A = Aw + 2 * Af;
+        res.x_bar = (Aw * xw + 2 * Af * xft) / res.A;
+        res.y_bar = H / 2.0;
+        let Ixw = tw * Math.pow(hw, 3) / 12.0, Iyw = hw * Math.pow(tw, 3) / 12.0;
+        let Ixf = B * Math.pow(tf, 3) / 12.0, Iyf = tf * Math.pow(B, 3) / 12.0;
+        res.Ix = Ixw + 2 * (Ixf + Af * Math.pow(yft - res.y_bar, 2));
+        res.Iy = Iyw + Aw * Math.pow(xw - res.x_bar, 2) + 2 * (Iyf + Af * Math.pow(xft - res.x_bar, 2));
+        res.Iu = res.Ix; res.Iv = res.Iy;
+        res.Imin = Math.min(res.Ix, res.Iy); res.Imax = Math.max(res.Ix, res.Iy);
+    } else if (s === 'angle_section') {
+        let B = (Number(params.B) || 50) * 1e-3;
+        let H = (Number(params.H) || 50) * 1e-3;
+        let th = (Number(params.th) || Number(params.t) || 5) * 1e-3;
+        let tv = (Number(params.tv) || Number(params.t) || 5) * 1e-3;
+        if (th >= H) th = H * 0.1;
+        if (tv >= B) tv = B * 0.1;
+        let h1 = H - th;
+        let A1 = tv * h1, x1 = tv / 2.0, y1 = th + h1 / 2.0;
+        let A2 = B * th, x2 = B / 2.0, y2 = th / 2.0;
+        res.A = A1 + A2;
+        res.x_bar = (A1 * x1 + A2 * x2) / res.A;
+        res.y_bar = (A1 * y1 + A2 * y2) / res.A;
+        let Ix1 = tv * Math.pow(h1, 3) / 12.0, Iy1 = h1 * Math.pow(tv, 3) / 12.0;
+        let Ix2 = B * Math.pow(th, 3) / 12.0, Iy2 = th * Math.pow(B, 3) / 12.0;
+        res.Ix = Ix1 + A1 * Math.pow(y1 - res.y_bar, 2) + Ix2 + A2 * Math.pow(y2 - res.y_bar, 2);
+        res.Iy = Iy1 + A1 * Math.pow(x1 - res.x_bar, 2) + Iy2 + A2 * Math.pow(x2 - res.x_bar, 2);
+        res.Ixy = A1 * (x1 - res.x_bar) * (y1 - res.y_bar) + A2 * (x2 - res.x_bar) * (y2 - res.y_bar);
+        let R = Math.hypot((res.Ix - res.Iy) / 2.0, res.Ixy);
+        res.Imin = (res.Ix + res.Iy) / 2.0 - R;
+        res.Imax = (res.Ix + res.Iy) / 2.0 + R;
+        res.Iu = res.Imin; res.Iv = res.Imax;
+        res.theta_p = 0.5 * Math.atan2(-2.0 * res.Ixy, res.Ix - res.Iy);
+    } else if (s === 'custom') {
+        res.A = (Number(params.A) || 500) * 1e-6;
+        if (params.Iu && params.Iv) {
+            res.Iu = Number(params.Iu) * 1e-12;
+            res.Iv = Number(params.Iv) * 1e-12;
+            res.Imin = Math.min(res.Iu, res.Iv); res.Imax = Math.max(res.Iu, res.Iv);
+        } else {
+            res.Ix = (Number(params.Ix) || 1e4) * 1e-12;
+            res.Iy = (Number(params.Iy) || 1e4) * 1e-12;
+            res.Ixy = (Number(params.Ixy) || 0) * 1e-12;
+            let R = Math.hypot((res.Ix - res.Iy) / 2.0, res.Ixy);
+            res.Imin = (res.Ix + res.Iy) / 2.0 - R;
+            res.Imax = (res.Ix + res.Iy) / 2.0 + R;
+            res.Iu = res.Imin; res.Iv = res.Imax;
+        }
+    }
+    res.r_min = res.A > 0 && res.Imin > 0 ? Math.sqrt(res.Imin / res.A) : 0;
+    return res;
+}
+
+// Global active defaults
+let defaultSectionState = {
+    shape: 'solid_circle',
+    name: 'Solid Circular Rod (D=20mm)',
+    params: { D: 20 }
+};
+
+let defaultBucklingState = {
+    preset_u: 'pinned_pinned',
+    preset_v: 'pinned_pinned',
+    ku: 1.0,
+    kv: 1.0,
+    Lu: 'auto',
+    Lv: 'auto',
+    configured: true
+};
+
+let memberOverrides = {}; // elementId -> { section: {...}, buckling: {...} }
+
+function invalidateAnalysisResults() {
+    state.analysisResult = null;
+    let badge = document.getElementById('resStatusBadge');
+    if (badge) {
+        badge.className = 'status warning';
+        badge.textContent = 'Results Outdated (Inputs Modified)';
+    }
+    let desc = document.getElementById('step7Desc');
+    if (desc) desc.innerHTML = 'Inputs have been modified. Please re-run the solver in Step 6 to calculate updated results.';
+    let report = document.getElementById('reportOutput');
+    if (report) report.innerHTML = '<div style="padding:40px; text-align:center; color:var(--muted);">Properties updated. Run Analysis in Step 6 to generate an updated calculation report.</div>';
+}
+
+function onMaterialPresetChange() {
+    let p = document.getElementById('matPreset')?.value;
+    if (p === 'steel') {
+        document.getElementById('matE').value = 200;
+        document.getElementById('matNu').value = 0.30;
+        document.getElementById('matDensity').value = 7850;
+        document.getElementById('matFy').value = 250;
+    } else if (p === 'aluminum') {
+        document.getElementById('matE').value = 69;
+        document.getElementById('matNu').value = 0.33;
+        document.getElementById('matDensity').value = 2700;
+        document.getElementById('matFy').value = 160;
+    } else if (p === 'titanium') {
+        document.getElementById('matE').value = 114;
+        document.getElementById('matNu').value = 0.34;
+        document.getElementById('matDensity').value = 4430;
+        document.getElementById('matFy').value = 830;
+    } else if (p === 'concrete') {
+        document.getElementById('matE').value = 30;
+        document.getElementById('matNu').value = 0.20;
+        document.getElementById('matDensity').value = 2400;
+        document.getElementById('matFy').value = 35;
+    }
+    onMaterialInputChange();
+}
+
+function onMaterialInputChange() {
+    let uiE = Number(document.getElementById('matE')?.value);
+    if (uiE) state.E = uiE * 1e9;
+    let uiNu = document.getElementById('matNu')?.value;
+    if (uiNu !== '') state.nu = Number(uiNu);
+    let uiDen = document.getElementById('matDensity')?.value;
+    if (uiDen !== '') state.density = Number(uiDen);
+    let uiFy = document.getElementById('matFy')?.value;
+    if (uiFy !== '') state.fy = Number(uiFy);
+    invalidateAnalysisResults();
+    updateSectionBadge();
+}
+
+function onSectionShapeChange() {
+    let shape = document.getElementById('secShape')?.value || 'solid_circle';
+    defaultSectionState.shape = shape;
+    renderSectionParamsInputs('secParamsContainer', shape, defaultSectionState.params);
+    updateCurrentSectionFromUI();
+}
+
+function renderSectionParamsInputs(containerId, shape, currentParams) {
+    let container = document.getElementById(containerId);
+    if (!container) return;
+    let p = currentParams || {};
+    let html = '';
+
+    if (shape === 'solid_circle') {
+        html = `
+        <div class="form-grid">
+          <div><label>Diameter D [mm]</label><input type="number" step="1" min="1" id="${containerId}_D" value="${p.D || 20}" oninput="updateCurrentSectionFromUI()"></div>
+        </div>`;
+    } else if (shape === 'hollow_circle') {
+        html = `
+        <div class="form-grid">
+          <div><label>Outer Diameter D [mm]</label><input type="number" step="1" min="1" id="${containerId}_D" value="${p.D || 40}" oninput="updateCurrentSectionFromUI()"></div>
+          <div><label>Inner Diameter d [mm]</label><input type="number" step="1" min="0.1" id="${containerId}_d" value="${p.d || 30}" oninput="updateCurrentSectionFromUI()"></div>
+        </div>`;
+    } else if (shape === 'solid_rectangle') {
+        html = `
+        <div class="form-grid">
+          <div><label>Width b [mm]</label><input type="number" step="1" min="1" id="${containerId}_b" value="${p.b || 20}" oninput="updateCurrentSectionFromUI()"></div>
+          <div><label>Depth h [mm]</label><input type="number" step="1" min="1" id="${containerId}_h" value="${p.h || 40}" oninput="updateCurrentSectionFromUI()"></div>
+        </div>`;
+    } else if (shape === 'solid_square') {
+        html = `
+        <div class="form-grid">
+          <div><label>Side Width b [mm]</label><input type="number" step="1" min="1" id="${containerId}_b" value="${p.b || 20}" oninput="updateCurrentSectionFromUI()"></div>
+        </div>`;
+    } else if (shape === 'rectangular_hollow') {
+        html = `
+        <div class="form-grid">
+          <div><label>Outer Width B [mm]</label><input type="number" step="1" min="1" id="${containerId}_B" value="${p.B || 40}" oninput="updateCurrentSectionFromUI()"></div>
+          <div><label>Outer Depth H [mm]</label><input type="number" step="1" min="1" id="${containerId}_H" value="${p.H || 60}" oninput="updateCurrentSectionFromUI()"></div>
+          <div style="grid-column: 1 / -1;"><label>Wall Thickness t [mm]</label><input type="number" step="0.5" min="0.1" id="${containerId}_t" value="${p.t || 4}" oninput="updateCurrentSectionFromUI()"></div>
+        </div>`;
+    } else if (shape === 'square_hollow') {
+        html = `
+        <div class="form-grid">
+          <div><label>Outer Width B [mm]</label><input type="number" step="1" min="1" id="${containerId}_B" value="${p.B || 40}" oninput="updateCurrentSectionFromUI()"></div>
+          <div><label>Wall Thickness t [mm]</label><input type="number" step="0.5" min="0.1" id="${containerId}_t" value="${p.t || 4}" oninput="updateCurrentSectionFromUI()"></div>
+        </div>`;
+    } else if (shape === 'i_section') {
+        html = `
+        <div class="form-grid">
+          <div><label>Flange Width B [mm]</label><input type="number" step="1" min="1" id="${containerId}_B" value="${p.B || 100}" oninput="updateCurrentSectionFromUI()"></div>
+          <div><label>Total Depth H [mm]</label><input type="number" step="1" min="1" id="${containerId}_H" value="${p.H || 100}" oninput="updateCurrentSectionFromUI()"></div>
+          <div><label>Web Thickness tw [mm]</label><input type="number" step="0.5" min="0.1" id="${containerId}_tw" value="${p.tw || 6}" oninput="updateCurrentSectionFromUI()"></div>
+          <div><label>Flange Thickness tf [mm]</label><input type="number" step="0.5" min="0.1" id="${containerId}_tf" value="${p.tf || 8}" oninput="updateCurrentSectionFromUI()"></div>
+        </div>`;
+    } else if (shape === 'tee_section') {
+        html = `
+        <div class="form-grid">
+          <div><label>Flange Width B [mm]</label><input type="number" step="1" min="1" id="${containerId}_B" value="${p.B || 100}" oninput="updateCurrentSectionFromUI()"></div>
+          <div><label>Total Depth H [mm]</label><input type="number" step="1" min="1" id="${containerId}_H" value="${p.H || 100}" oninput="updateCurrentSectionFromUI()"></div>
+          <div><label>Web Thickness tw [mm]</label><input type="number" step="0.5" min="0.1" id="${containerId}_tw" value="${p.tw || 6}" oninput="updateCurrentSectionFromUI()"></div>
+          <div><label>Flange Thickness tf [mm]</label><input type="number" step="0.5" min="0.1" id="${containerId}_tf" value="${p.tf || 8}" oninput="updateCurrentSectionFromUI()"></div>
+        </div>`;
+    } else if (shape === 'channel_section') {
+        html = `
+        <div class="form-grid">
+          <div><label>Flange Width B [mm]</label><input type="number" step="1" min="1" id="${containerId}_B" value="${p.B || 50}" oninput="updateCurrentSectionFromUI()"></div>
+          <div><label>Total Depth H [mm]</label><input type="number" step="1" min="1" id="${containerId}_H" value="${p.H || 100}" oninput="updateCurrentSectionFromUI()"></div>
+          <div><label>Web Thickness tw [mm]</label><input type="number" step="0.5" min="0.1" id="${containerId}_tw" value="${p.tw || 5}" oninput="updateCurrentSectionFromUI()"></div>
+          <div><label>Flange Thickness tf [mm]</label><input type="number" step="0.5" min="0.1" id="${containerId}_tf" value="${p.tf || 6}" oninput="updateCurrentSectionFromUI()"></div>
+        </div>`;
+    } else if (shape === 'angle_section') {
+        html = `
+        <div class="form-grid">
+          <div><label>Horizontal Leg B [mm]</label><input type="number" step="1" min="1" id="${containerId}_B" value="${p.B || 50}" oninput="updateCurrentSectionFromUI()"></div>
+          <div><label>Vertical Leg H [mm]</label><input type="number" step="1" min="1" id="${containerId}_H" value="${p.H || 50}" oninput="updateCurrentSectionFromUI()"></div>
+          <div><label>Horizontal Thk th [mm]</label><input type="number" step="0.5" min="0.1" id="${containerId}_th" value="${p.th || 5}" oninput="updateCurrentSectionFromUI()"></div>
+          <div><label>Vertical Thk tv [mm]</label><input type="number" step="0.5" min="0.1" id="${containerId}_tv" value="${p.tv || 5}" oninput="updateCurrentSectionFromUI()"></div>
+        </div>`;
+    } else if (shape === 'custom') {
+        html = `
+        <div class="form-grid">
+          <div style="grid-column: 1 / -1;"><label>Section Name</label><input type="text" id="${containerId}_name" value="${p.name || 'Custom Steel Profile'}"></div>
+          <div><label>Area A [mm²]</label><input type="number" step="10" min="1" id="${containerId}_A" value="${p.A || 500}" oninput="updateCurrentSectionFromUI()"></div>
+          <div><label>Principal Iu [mm⁴]</label><input type="number" step="100" min="1" id="${containerId}_Iu" value="${p.Iu || 15000}" oninput="updateCurrentSectionFromUI()"></div>
+          <div style="grid-column: 1 / -1;"><label>Principal Iv [mm⁴]</label><input type="number" step="100" min="1" id="${containerId}_Iv" value="${p.Iv || 10000}" oninput="updateCurrentSectionFromUI()"></div>
+        </div>`;
+    }
+    container.innerHTML = html;
+}
+
+function readSectionParamsFromUI(containerId, shape) {
+    let p = {};
+    let fields = ['D', 'd', 'b', 'h', 'B', 'H', 't', 'tw', 'tf', 'th', 'tv', 'A', 'Iu', 'Iv', 'Ix', 'Iy', 'Ixy', 'name'];
+    fields.forEach(f => {
+        let el = document.getElementById(containerId + '_' + f);
+        if (el) p[f] = (f === 'name') ? el.value : Number(el.value);
+    });
+    return p;
+}
+
+function updateCurrentSectionFromUI() {
+    let shape = document.getElementById('secShape')?.value || 'solid_circle';
+    let params = readSectionParamsFromUI('secParamsContainer', shape);
+    defaultSectionState.shape = shape;
+    defaultSectionState.params = params;
+    
+    let geo = calcSectionGeometryJS(shape, params);
+    state.A = geo.A; // Keep state.A in sync
+    document.getElementById('matA').value = (geo.A * 1e6).toFixed(2);
+    
+    invalidateAnalysisResults();
+    updateSectionBadge();
+    buildMemberPropertiesScheduleTable();
+}
+
+function updateSectionBadge() {
+    let geo = calcSectionGeometryJS(defaultSectionState.shape, defaultSectionState.params);
+    let elA = document.getElementById('secBadgeA');
+    let elIu = document.getElementById('secBadgeIu');
+    let elIv = document.getElementById('secBadgeIv');
+    let elR = document.getElementById('secBadgeR');
+    let elMass = document.getElementById('secBadgeMass');
+    
+    let rho = state.density || 7850;
+    let massPerM = geo.A * rho;
+
+    if (elA) elA.textContent = `${(geo.A * 1e6).toLocaleString(undefined, {maximumFractionDigits: 1})} mm²`;
+    if (elIu) elIu.textContent = `${(geo.Iu * 1e12).toLocaleString(undefined, {maximumFractionDigits: 0})} mm⁴`;
+    if (elIv) elIv.textContent = `${(geo.Iv * 1e12).toLocaleString(undefined, {maximumFractionDigits: 0})} mm⁴`;
+    if (elR) elR.textContent = `${(geo.r_min * 1e3).toFixed(2)} mm`;
+    if (elMass) elMass.textContent = `${massPerM.toFixed(2)} kg/m`;
+}
+
+function onBucklingPresetChange(axis) {
+    let preset = document.getElementById(axis === 'u' ? 'bckPresetU' : 'bckPresetV')?.value;
+    let kInput = document.getElementById(axis === 'u' ? 'bckKu' : 'bckKv');
+    if (!kInput) return;
+    
+    if (preset === 'pinned_pinned') kInput.value = 1.0;
+    else if (preset === 'fixed_fixed') kInput.value = 0.5;
+    else if (preset === 'fixed_pinned') kInput.value = 0.70;
+    else if (preset === 'cantilever') kInput.value = 2.0;
+
+    if (axis === 'u') defaultBucklingState.ku = Number(kInput.value);
+    else defaultBucklingState.kv = Number(kInput.value);
+
+    invalidateAnalysisResults();
+    buildMemberPropertiesScheduleTable();
+}
+
+function onBucklingFactorChange(axis) {
+    let kInput = document.getElementById(axis === 'u' ? 'bckKu' : 'bckKv');
+    let val = Math.max(0.01, Number(kInput?.value) || 1.0);
+    if (axis === 'u') defaultBucklingState.ku = val;
+    else defaultBucklingState.kv = val;
+    invalidateAnalysisResults();
+    buildMemberPropertiesScheduleTable();
+}
+
+function onBucklingLengthChange(axis) {
+    let lInput = document.getElementById(axis === 'u' ? 'bckLu' : 'bckLv');
+    let val = (lInput?.value || '').trim();
+    if (axis === 'u') defaultBucklingState.Lu = (val === '' || val.toLowerCase().includes('auto')) ? 'auto' : Math.max(0.01, Number(val));
+    else defaultBucklingState.Lv = (val === '' || val.toLowerCase().includes('auto')) ? 'auto' : Math.max(0.01, Number(val));
+    invalidateAnalysisResults();
+    buildMemberPropertiesScheduleTable();
+}
+
+function buildMemberPropertiesScheduleTable() {
+    let tbody = document.getElementById('memberScheduleBody');
+    if (!tbody) return;
+    let elements = state.elements || [];
+    if (elements.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:16px; color:var(--muted);">No elements defined yet. Complete Step 2 &amp; 3 geometry first.</td></tr>';
+        return;
+    }
+
+    let defaultGeo = calcSectionGeometryJS(defaultSectionState.shape, defaultSectionState.params);
+    let html = '';
+
+    elements.forEach(el => {
+        let id = el.id;
+        let ovr = memberOverrides[id];
+        let geo = ovr && ovr.section ? calcSectionGeometryJS(ovr.section.shape, ovr.section.params) : defaultGeo;
+        let bck = ovr && ovr.buckling ? ovr.buckling : defaultBucklingState;
+
+        let ku = bck.ku || 1.0;
+        let kv = bck.kv || 1.0;
+        let Lu = (bck.Lu && bck.Lu !== 'auto') ? Number(bck.Lu) : el.length;
+        let Lv = (bck.Lv && bck.Lv !== 'auto') ? Number(bck.Lv) : el.length;
+
+        let shapeLabel = geo.shape.replace('_', ' ').toUpperCase();
+        let isOverridden = !!ovr;
+
+        html += `
+        <tr>
+          <td><b>E${id}</b></td>
+          <td>N${el.startNode} &rarr; N${el.endNode}</td>
+          <td>${el.length.toFixed(2)}</td>
+          <td>${shapeLabel}</td>
+          <td>${(geo.A * 1e6).toFixed(1)}</td>
+          <td>${(geo.Iu * 1e12).toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+          <td>${(geo.Iv * 1e12).toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+          <td>${(ku * Lu).toFixed(2)}</td>
+          <td>${(kv * Lv).toFixed(2)}</td>
+          <td>${isOverridden ? '<span class="override-pill">Custom Override</span>' : '<span style="color:var(--muted);">Default</span>'}</td>
+          <td>
+            <button class="btn small" style="padding: 2px 8px; font-size:11px;" onclick="openMemberOverrideModal(${id})">${isOverridden ? 'Edit' : 'Override'}</button>
+            ${isOverridden ? `<button class="btn small" style="padding: 2px 6px; font-size:11px; margin-left:4px; color:#dc2626;" onclick="resetMemberOverride(${id})">Reset</button>` : ''}
+          </td>
+        </tr>`;
+    });
+
+    tbody.innerHTML = html;
+}
+
+function applyDefaultSectionToAll() {
+    memberOverrides = {};
+    buildMemberPropertiesScheduleTable();
+    invalidateAnalysisResults();
+    toast("Global default section applied to all truss members.");
+}
+
+function resetMemberOverride(id) {
+    delete memberOverrides[id];
+    buildMemberPropertiesScheduleTable();
+    invalidateAnalysisResults();
+    toast(`Member E${id} reset to default section.`);
+}
+
+function openMemberOverrideModal(elemId) {
+    let el = (state.elements || []).find(e => e.id === elemId);
+    if (!el) return;
+    document.getElementById('overrideElemId').value = elemId;
+    document.getElementById('overrideModalTitle').textContent = `Override Member E${elemId} Properties`;
+
+    let ovr = memberOverrides[elemId] || {};
+    let shapeSelect = document.getElementById('overrideShape');
+    let activeShape = (ovr.section && ovr.section.shape) ? ovr.section.shape : 'solid_circle';
+    if (shapeSelect) shapeSelect.value = activeShape;
+
+    renderSectionParamsInputs('overrideParamsContainer', activeShape, ovr.section ? ovr.section.params : defaultSectionState.params);
+
+    let kuInput = document.getElementById('overrideKu');
+    let luInput = document.getElementById('overrideLu');
+    let kvInput = document.getElementById('overrideKv');
+    let lvInput = document.getElementById('overrideLv');
+
+    if (kuInput) kuInput.value = (ovr.buckling && ovr.buckling.ku) ? ovr.buckling.ku : defaultBucklingState.ku;
+    if (luInput) luInput.value = (ovr.buckling && ovr.buckling.Lu && ovr.buckling.Lu !== 'auto') ? ovr.buckling.Lu : 0;
+    if (kvInput) kvInput.value = (ovr.buckling && ovr.buckling.kv) ? ovr.buckling.kv : defaultBucklingState.kv;
+    if (lvInput) lvInput.value = (ovr.buckling && ovr.buckling.Lv && ovr.buckling.Lv !== 'auto') ? ovr.buckling.Lv : 0;
+
+    let modal = document.getElementById('memberOverrideModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function onOverrideShapeChange() {
+    let shape = document.getElementById('overrideShape')?.value || 'solid_circle';
+    if (shape === 'inherit') {
+        renderSectionParamsInputs('overrideParamsContainer', defaultSectionState.shape, defaultSectionState.params);
+    } else {
+        renderSectionParamsInputs('overrideParamsContainer', shape, {});
+    }
+}
+
+function saveMemberOverride() {
+    let elemId = Number(document.getElementById('overrideElemId')?.value);
+    let shape = document.getElementById('overrideShape')?.value || 'solid_circle';
+    
+    if (shape === 'inherit') {
+        delete memberOverrides[elemId];
+    } else {
+        let params = readSectionParamsFromUI('overrideParamsContainer', shape);
+        let ku = Number(document.getElementById('overrideKu')?.value) || 1.0;
+        let lu = Number(document.getElementById('overrideLu')?.value) || 0;
+        let kv = Number(document.getElementById('overrideKv')?.value) || 1.0;
+        let lv = Number(document.getElementById('overrideLv')?.value) || 0;
+
+        memberOverrides[elemId] = {
+            section: { shape: shape, params: params, name: `Member E${elemId} Custom` },
+            buckling: {
+                ku: ku,
+                kv: kv,
+                Lu: lu > 0 ? lu : 'auto',
+                Lv: lv > 0 ? lv : 'auto',
+                configured: true
+            }
+        };
+    }
+
+    closeMemberOverrideModal();
+    buildMemberPropertiesScheduleTable();
+    invalidateAnalysisResults();
+    toast(`Override updated for Member E${elemId}.`);
+}
+
+function closeMemberOverrideModal() {
+    let modal = document.getElementById('memberOverrideModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function getMemberPropertiesPayload() {
+    let defaultGeo = calcSectionGeometryJS(defaultSectionState.shape, defaultSectionState.params);
+    let elements = state.elements || [];
+    let list = [];
+
+    elements.forEach(el => {
+        let id = el.id;
+        let ovr = memberOverrides[id];
+        let shape = ovr && ovr.section ? ovr.section.shape : defaultSectionState.shape;
+        let rawParams = ovr && ovr.section ? ovr.section.params : defaultSectionState.params;
+        let geo = calcSectionGeometryJS(shape, rawParams);
+
+        let bck = ovr && ovr.buckling ? ovr.buckling : defaultBucklingState;
+        let ku = bck.ku || 1.0;
+        let kv = bck.kv || 1.0;
+        let Lu = (bck.Lu && bck.Lu !== 'auto') ? Number(bck.Lu) : el.length;
+        let Lv = (bck.Lv && bck.Lv !== 'auto') ? Number(bck.Lv) : el.length;
+
+        // Convert params to SI meters for backend
+        let paramsSI = {};
+        for (let k in rawParams) {
+            paramsSI[k] = (k === 'name') ? rawParams[k] : (Number(rawParams[k]) * 1e-3);
+        }
+        paramsSI['A'] = geo.A;
+        paramsSI['Iu'] = geo.Iu;
+        paramsSI['Iv'] = geo.Iv;
+
+        list.push({
+            id: id,
+            element_id: id,
+            section: {
+                shape: shape,
+                name: (ovr && ovr.section && ovr.section.name) ? ovr.section.name : defaultSectionState.name,
+                params: paramsSI
+            },
+            A: geo.A,
+            buckling: {
+                preset_u: bck.preset_u || 'pinned_pinned',
+                preset_v: bck.preset_v || 'pinned_pinned',
+                ku: ku,
+                kv: kv,
+                Lu: Lu,
+                Lv: Lv,
+                configured: bck.configured !== false
+            },
+            E: state.E || 200e9,
+            density: state.density || 7850
+        });
+    });
+
+    return list;
+}
+
+function renderStep4UI() {
+    onSectionShapeChange();
+    updateSectionBadge();
+    buildMemberPropertiesScheduleTable();
+}
+
 let current = 1;
 let highestStepReached = 1;
 const STORAGE_KEY = 'trusslab_projects_v2';
@@ -874,11 +1706,14 @@ function exportProjectFile() {
     let name = (document.getElementById('projectName')?.value || 'Untitled Truss').trim() || 'Untitled Truss';
     let data = {
         name: name,
-        version: "1.0",
+        version: "2.0",
         date: new Date().toISOString(),
         step: current,
         assignments: assignments,
-        state: state
+        state: state,
+        defaultSection: defaultSectionState,
+        defaultBuckling: defaultBucklingState,
+        memberOverrides: memberOverrides
     };
     
     let blob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
@@ -1002,6 +1837,20 @@ function editProject(id){
   if(state.nu !== undefined && document.getElementById('matNu')) document.getElementById('matNu').value = state.nu;
   if(state.density !== undefined && document.getElementById('matDensity')) document.getElementById('matDensity').value = state.density;
 
+  if (project.defaultSection) {
+      defaultSectionState = project.defaultSection;
+      defaultBucklingState = project.defaultBuckling || defaultBucklingState;
+      memberOverrides = project.memberOverrides || {};
+  } else if (project.state && project.state.A) {
+      defaultSectionState = {
+          shape: 'solid_circle',
+          name: 'Legacy Circular Section',
+          params: { D: Math.sqrt(4.0 * project.state.A / Math.PI) * 1000 }
+      };
+      defaultBucklingState.configured = false;
+      memberOverrides = {};
+  }
+
   go(highestStepReached);
 }
 function deleteProject(id){
@@ -1036,6 +1885,10 @@ function saveProject(completed=false, silent=false){
     const record = existing;
     record.name=name; record.step=current; record.status=completed?'Completed':'Draft'; record.updated=Date.now();
     record.assignments=assignments; record.state=state;
+    record.version = "2.0";
+    record.defaultSection = defaultSectionState;
+    record.defaultBuckling = defaultBucklingState;
+    record.memberOverrides = memberOverrides;
     
     let next = projects;
     if (projects.find(p => p.id === record.id)) {
@@ -1242,7 +2095,7 @@ function buildTrianglesUI() {
 }
 
 
-function applyResults(U, elemResults, maxDisp, maxStress, maxTension, maxCompression, toastMsg, reactions = []) {
+function applyResults(U, elemResults, maxDisp, maxStress, maxTension, maxCompression, toastMsg, reactions = [], buckling_results = []) {
     if (typeof maxStress === 'string') {
         toastMsg = maxStress;
         maxStress = undefined;
@@ -1264,6 +2117,7 @@ function applyResults(U, elemResults, maxDisp, maxStress, maxTension, maxCompres
         U: U, 
         elements: elemResults, 
         reactions: reactions,
+        buckling_results: buckling_results,
         maxDisp: maxDisp, 
         maxStress: maxStress, 
         maxTension: maxTension, 
@@ -1795,13 +2649,15 @@ function updateStep7() {
     if (tbody) {
         let rowsHtml = '';
         res.elements.forEach(el => {
-            let isTens = el.state.startsWith('Tension') || (el.force > 1e-6);
-            let isComp = el.state.startsWith('Buckled') || el.state.startsWith('Compression') || (el.force < -1e-6);
+            let st = el.state || '';
+            let isTens = st.startsWith('Tension') || (el.force > 1e-6);
+            let isComp = st.startsWith('Buckled') || st.startsWith('Compression') || (el.force < -1e-6);
             let col = isTens ? 'var(--blue)' : (isComp ? 'var(--danger)' : 'var(--muted)');
             let strVal = (el.stress !== undefined) ? (el.stress > 0 ? '+' : '') + el.stress.toFixed(1) : '-';
             let forceVal = (el.force !== undefined) ? (el.force > 0 ? '+' : '') + el.force.toFixed(2) : '-';
             let nodeStr = (el.startNode && el.endNode) ? `N${el.startNode}–N${el.endNode}` : '';
-            rowsHtml += `<tr><td><b>E${el.id}</b></td><td>${nodeStr}</td><td style="font-weight:600;">${forceVal}</td><td>${strVal}</td><td style="color:${col}; font-weight:700;">${el.state}</td></tr>`;
+            let stateLabel = st || (isTens ? 'Tension' : (isComp ? 'Compression' : 'Zero Force'));
+            rowsHtml += `<tr><td><b>E${el.id}</b></td><td>${nodeStr}</td><td style="font-weight:600;">${forceVal}</td><td>${strVal}</td><td style="color:${col}; font-weight:700;">${stateLabel}</td></tr>`;
         });
         tbody.innerHTML = rowsHtml;
     }
@@ -1810,9 +2666,18 @@ function updateStep7() {
 }
 
 function downloadReportHTML() {
-    let htmlContent = generateReportHTML();
-    if (!htmlContent) return;
-    let fullDoc = `<!DOCTYPE html>
+    try {
+        let res = state.analysisResult;
+        if (!res || !res.elements || res.elements.length === 0) {
+            toast("⚠️ Please run analysis first in Step 6 before downloading report.");
+            return;
+        }
+        let htmlContent = generateReportHTML();
+        if (!htmlContent) {
+            toast("⚠️ Could not generate report HTML.");
+            return;
+        }
+        let fullDoc = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1833,15 +2698,19 @@ ${htmlContent}
 </div>
 </body>
 </html>`;
-    let blob = new Blob([fullDoc], { type: 'text/html' });
-    let a = document.createElement('a');
-    let pName = (document.getElementById('projectName')?.value || 'TrussLab').trim().replace(/\s+/g, '_');
-    a.download = `${pName}_Engineering_Report.html`;
-    a.href = URL.createObjectURL(blob);
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    toast("Report downloaded as HTML (Can be opened and printed directly to PDF)");
+        let blob = new Blob([fullDoc], { type: 'text/html' });
+        let a = document.createElement('a');
+        let pName = (document.getElementById('projectName')?.value || 'TrussLab').trim().replace(/\s+/g, '_');
+        a.download = `${pName}_Engineering_Report.html`;
+        a.href = URL.createObjectURL(blob);
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        toast("Report downloaded as HTML (Can be opened and printed directly to PDF)");
+    } catch (err) {
+        console.error("Download HTML error:", err);
+        alert("Error downloading report: " + err.message);
+    }
 }
 
 function solveLinearSystem(A, b) {
@@ -1921,6 +2790,18 @@ function solveTrussClientSide(payload) {
     let checkBuckling = Boolean(payload.check_buckling);
     let analysisType = payload.analysis_type || 'linear_elastic';
 
+    // Map member properties (heterogeneous cross-section library)
+    let memPropMap = {};
+    (payload.member_properties || []).forEach(mp => {
+        memPropMap[mp.id] = mp;
+    });
+
+    const getMemberA = (elemId) => {
+        let mp = memPropMap[elemId];
+        if (mp && typeof mp.A === 'number' && mp.A > 0) return mp.A;
+        return A;
+    };
+
     let totalDofs = 2 * numNodes;
     let K = Array.from({ length: totalDofs }, () => new Float64Array(totalDofs));
     let F = new Float64Array(totalDofs);
@@ -1934,12 +2815,13 @@ function solveTrussClientSide(payload) {
         }
     });
 
-    // Gravitational self-weight (dead load)
+    // Gravitational self-weight (dead load) using per-member Ai
     let totalDeadLoad = 0;
     if (includeSelfWeight && density > 0) {
         const g = 9.80665;
         elements.forEach(el => {
-            let elMass = density * A * el.length;
+            let memA = getMemberA(el.id);
+            let elMass = density * memA * el.length;
             let elWeight = elMass * g;
             totalDeadLoad += elWeight;
             let n1 = Number(el.startNode);
@@ -1949,14 +2831,15 @@ function solveTrussClientSide(payload) {
         });
     }
 
-    // Assemble global stiffness matrix
+    // Assemble global stiffness matrix using per-member ke = (E * Ai) / L
     elements.forEach(el => {
         let n1 = Number(el.startNode);
         let n2 = Number(el.endNode);
         let L = el.length;
         let c = el.c;
         let s = el.s;
-        let k = (E * A) / L;
+        let memA = getMemberA(el.id);
+        let k = (E * memA) / L;
 
         let c2 = c * c * k;
         let cs = c * s * k;
@@ -1996,73 +2879,26 @@ function solveTrussClientSide(payload) {
         throw new Error(`Under-constrained system: only ${fixedSet.size} DOFs restrained. A stable 2D planar truss requires at least 3 non-parallel restraints.`);
     }
 
-    let U = new Float64Array(totalDofs);
-    let M = freeDofs.length;
+    let nFree = freeDofs.length;
+    let K_ff = Array.from({ length: nFree }, () => new Float64Array(nFree));
+    let F_f = new Float64Array(nFree);
 
-    if (M > 0) {
-        let K_ff = Array.from({ length: M }, () => new Float64Array(M));
-        let F_f = new Float64Array(M);
-        for (let i = 0; i < M; i++) {
-            F_f[i] = F[freeDofs[i]];
-            for (let j = 0; j < M; j++) {
-                K_ff[i][j] = K[freeDofs[i]][freeDofs[j]];
-            }
-        }
-
-        let U_f = solveLinearSystem(K_ff, F_f);
-        for (let i = 0; i < M; i++) {
-            U[freeDofs[i]] = U_f[i];
-        }
-
-        // Geometric nonlinear (P-Delta) if selected
-        if (analysisType === 'second_order') {
-            try {
-                let K2 = Array.from({ length: totalDofs }, () => new Float64Array(totalDofs));
-                elements.forEach(el => {
-                    let n1 = Number(el.startNode);
-                    let n2 = Number(el.endNode);
-                    let p1 = coords[n1], p2 = coords[n2];
-                    let x1 = p1[0] + U[2 * n1 - 2], y1 = p1[1] + U[2 * n1 - 1];
-                    let x2 = p2[0] + U[2 * n2 - 2], y2 = p2[1] + U[2 * n2 - 1];
-                    let dx = x2 - x1, dy = y2 - y1;
-                    let L2 = Math.hypot(dx, dy);
-                    let c2 = dx / L2, s2 = dy / L2;
-                    let k2 = (E * A) / L2;
-                    let dofs = [2 * n1 - 2, 2 * n1 - 1, 2 * n2 - 2, 2 * n2 - 1];
-                    let ke2 = [
-                        [ c2*c2*k2,  c2*s2*k2, -c2*c2*k2, -c2*s2*k2],
-                        [ c2*s2*k2,  s2*s2*k2, -c2*s2*k2, -s2*s2*k2],
-                        [-c2*c2*k2, -c2*s2*k2,  c2*c2*k2,  c2*s2*k2],
-                        [-c2*s2*k2, -s2*s2*k2,  c2*s2*k2,  s2*s2*k2]
-                    ];
-                    for (let r = 0; r < 4; r++) {
-                        for (let col = 0; col < 4; col++) {
-                            K2[dofs[r]][dofs[col]] += ke2[r][col];
-                        }
-                    }
-                });
-                let K2_ff = Array.from({ length: M }, () => new Float64Array(M));
-                for (let i = 0; i < M; i++) {
-                    for (let j = 0; j < M; j++) {
-                        K2_ff[i][j] = K2[freeDofs[i]][freeDofs[j]];
-                    }
-                }
-                let U2_f = solveLinearSystem(K2_ff, F_f);
-                let valid = true;
-                for (let i = 0; i < M; i++) {
-                    if (isNaN(U2_f[i]) || !isFinite(U2_f[i])) { valid = false; break; }
-                }
-                if (valid) {
-                    for (let i = 0; i < M; i++) U[freeDofs[i]] = U2_f[i];
-                    K = K2;
-                }
-            } catch (e) {
-                console.warn("Second-order iteration skipped:", e);
-            }
+    for (let i = 0; i < nFree; i++) {
+        let fi = freeDofs[i];
+        F_f[i] = F[fi];
+        for (let j = 0; j < nFree; j++) {
+            K_ff[i][j] = K[fi][freeDofs[j]];
         }
     }
 
-    // Support reactions: {R} = [K]{U} - {F}
+    let U_f = solveLinearSystem(K_ff, F_f);
+
+    let U = new Float64Array(totalDofs);
+    for (let i = 0; i < nFree; i++) {
+        U[freeDofs[i]] = U_f[i];
+    }
+
+    // Support reactions
     let R_total = new Float64Array(totalDofs);
     for (let i = 0; i < totalDofs; i++) {
         let sum = 0;
@@ -2084,8 +2920,8 @@ function solveTrussClientSide(payload) {
         };
     });
 
-    // Element internal forces, stresses, buckling check
-    let I_eff = (A * A) / (4.0 * Math.PI);
+    // Element internal forces, stresses, and dual-axis Euler buckling
+    let bucklingResults = [];
     let elemResults = elements.map((el, idx) => {
         let id = el.id || (idx + 1);
         let ni = Number(el.startNode);
@@ -2096,18 +2932,54 @@ function solveTrussClientSide(payload) {
         let delta_L = c * (ujx - uix) + s * (ujy - uiy);
         let strain = delta_L / L;
         let stress = E * strain;
-        let axialForce = stress * A;
+        let memA = getMemberA(id);
+        let axialForce = stress * memA;
+
+        // Buckling properties
+        let mp = memPropMap[id] || {};
+        let Iu = (typeof mp.Iu === 'number' && mp.Iu > 0) ? mp.Iu : (memA * memA) / (4.0 * Math.PI);
+        let Iv = (typeof mp.Iv === 'number' && mp.Iv > 0) ? mp.Iv : Iu;
+        let ku = (typeof mp.ku === 'number' && mp.ku > 0) ? mp.ku : 1.0;
+        let kv = (typeof mp.kv === 'number' && mp.kv > 0) ? mp.kv : 1.0;
+        let Lu = (typeof mp.Lu === 'number' && mp.Lu > 0) ? mp.Lu : L;
+        let Lv = (typeof mp.Lv === 'number' && mp.Lv > 0) ? mp.Lv : L;
+
+        let Leff_u = ku * Lu;
+        let Leff_v = kv * Lv;
+        let Pcr_u = (Math.PI * Math.PI * E * Iu) / (Leff_u * Leff_u);
+        let Pcr_v = (Math.PI * Math.PI * E * Iv) / (Leff_v * Leff_v);
+        let p_cr_gov = Math.min(Pcr_u, Pcr_v);
+        let gov_axis = (Pcr_u <= Pcr_v) ? "u" : "v";
+
+        let util = 0;
+        let status = "Tension";
+        if (axialForce < -1e-6) {
+            util = Math.abs(axialForce) / p_cr_gov;
+            status = (checkBuckling && util >= 1.0) ? "Buckled" : "Safe";
+        } else if (Math.abs(axialForce) <= 1e-6) {
+            status = "Zero Force";
+        }
+
+        bucklingResults.push({
+            id: id,
+            axis_u: { k: ku, L: Lu, Leff: Leff_u, I: Iu, p_cr: Pcr_u },
+            axis_v: { k: kv, L: Lv, Leff: Leff_v, I: Iv, p_cr: Pcr_v },
+            governing_axis: gov_axis,
+            p_cr_gov: p_cr_gov,
+            axial_force: axialForce,
+            utilisation: util,
+            status: status
+        });
 
         let stateStr = "Zero Force";
         if (axialForce > 1e-6) {
             stateStr = "Tension";
         } else if (axialForce < -1e-6) {
             if (checkBuckling) {
-                let p_cr = (Math.PI * Math.PI * E * I_eff) / (L * L);
-                let util = Math.abs(axialForce) / p_cr;
+                let utilPct = Math.round(util * 100);
                 stateStr = (util >= 1.0)
-                    ? `Buckled (${Math.round(util * 100)}% Pcr)`
-                    : `Compression (${Math.round(util * 100)}% Pcr)`;
+                    ? `Buckled (${utilPct}% Pcr)`
+                    : `Compression (${utilPct}% Pcr)`;
             } else {
                 stateStr = "Compression";
             }
@@ -2158,6 +3030,7 @@ function solveTrussClientSide(payload) {
         elements: elemResults,
         displacements: displacements,
         reactions: reactions,
+        buckling_results: bucklingResults,
         summary: {
             max_displacement: maxDisp,
             max_stress: maxStress,
@@ -2209,7 +3082,8 @@ async function solve(){
           node: Number(k),
           fx: (assignments[k].fx || 0) * 1000,
           fy: (assignments[k].fy || 0) * 1000
-      }))
+      })),
+      member_properties: (typeof getMemberPropertiesPayload === 'function') ? getMemberPropertiesPayload() : []
   };
 
   let juliaUrl = getJuliaUrl();
@@ -2309,7 +3183,7 @@ Please check truss boundary conditions and geometry.`);
       if (includeSelfWeight) details.push('Dead Load');
       if (checkBuckling) details.push('Buckling Check');
       let successMsg = `Analysis Converged (${details.join(' · ')})`;
-      applyResults(U, elemResults, maxDisp, maxStress, maxTension, maxCompression, successMsg, data.reactions || []);
+      applyResults(U, elemResults, maxDisp, maxStress, maxTension, maxCompression, successMsg, data.reactions || [], data.buckling_results || []);
   } catch (err) {
       btn.textContent = 'Solve Failed';
       btn.disabled = false;
@@ -2688,12 +3562,12 @@ function generateReportHTML() {
         let n = parseFloat(String(v).replace(',', '.'));
         if (isNaN(n) || !isFinite(n)) n = 0;
         let s = n.toFixed(dec);
-        return s.replace(/\.+$/, ''); // Guaranteed no trailing period
+        return s.replace(/\.+$/, '');
     };
     const fmtLen = fmtDot;
 
     // Canonical coordinate list
-    let nodeKeys = Object.keys(state.coords).map(Number).sort((a,b) => a - b);
+    let nodeKeys = Object.keys(state.coords || {}).map(Number).sort((a,b) => a - b);
     let nodesHtml = nodeKeys.map(n => {
         let pt = state.coords[n] || [0, 0];
         let xVal = parseFloat(String(pt[0]).replace(',', '.')) || 0;
@@ -2701,7 +3575,7 @@ function generateReportHTML() {
         return `<tr><td style="font-weight:700;">N${n}</td><td>${xVal.toFixed(3)}</td><td>${yVal.toFixed(3)}</td></tr>`;
     }).join('');
     
-    // Section 3: Element Connectivity (Guaranteed 1-to-1 matching with Section 10!)
+    // Section 3: Element Connectivity
     let elHtml = (res && res.elements ? res.elements : state.elements).map(el => {
         let sNode = parseInt(el.startNode);
         let eNode = parseInt(el.endNode);
@@ -2724,7 +3598,6 @@ function generateReportHTML() {
             rxMap[r.node] = { rx: r.rx / 1000.0, ry: r.ry / 1000.0 };
         });
     } else {
-        // Dynamic exact fallback calculation
         let numN = nodeKeys.length;
         let R = new Float64Array(2 * numN);
         let E = state.E || 200e9, A = state.A || 500e-6;
@@ -2735,10 +3608,10 @@ function generateReportHTML() {
                 R[2*n - 1] -= (a.fy || 0) * 1000.0;
             }
         });
-        state.elements.forEach(el => {
+        (state.elements || []).forEach(el => {
             let ni = el.startNode, nj = el.endNode;
-            let uix = res.U[2*ni - 2], uiy = res.U[2*ni - 1];
-            let ujx = res.U[2*nj - 2], ujy = res.U[2*nj - 1];
+            let uix = res.U ? res.U[2*ni - 2] : 0, uiy = res.U ? res.U[2*ni - 1] : 0;
+            let ujx = res.U ? res.U[2*nj - 2] : 0, ujy = res.U ? res.U[2*nj - 1] : 0;
             let dL = el.c * (ujx - uix) + el.s * (ujy - uiy);
             let force = (E * A / el.length) * dL;
             R[2*ni - 2] -= force * el.c; R[2*ni - 1] -= force * el.s;
@@ -2801,15 +3674,66 @@ function generateReportHTML() {
         return `<tr><td><b>N${n}</b></td><td>${ux > 0 ? '+' : ''}${ux.toFixed(4)}</td><td>${uy > 0 ? '+' : ''}${uy.toFixed(4)}</td><td><b>${mag.toFixed(4)}</b></td></tr>`;
     }).join('') : '';
 
-    // Euler Buckling Section Properties
+    // Per-Member Section & Dual-Axis Buckling Properties
     let E_val = state.E || 200e9;
     let A_val = state.A || 500e-6;
-    let I_eff = (A_val * A_val) / (4.0 * Math.PI); // Solid circular bar moment of inertia
-    let d_eff = Math.sqrt(4.0 * A_val / Math.PI); // Diameter in meters
-    let r_gyr = d_eff / 4.0; // Radius of gyration
+    let defaultGeo = (typeof calcSectionGeometryJS === 'function' && typeof defaultSectionState !== 'undefined') 
+        ? calcSectionGeometryJS(defaultSectionState.shape, defaultSectionState.params)
+        : { A: A_val, Iu: (A_val*A_val)/(4*Math.PI), Iv: (A_val*A_val)/(4*Math.PI), r_min: Math.sqrt(A_val/Math.PI)/2, shape: 'solid_circle' };
 
-    // Section 10: Persistent IDs (E1..En), Consistent Signs & Euler Buckling Capacity
-    let forcesHtml = res.elements ? res.elements.map(el => {
+    let bucklingData = res.buckling_results || [];
+    let bckMap = {};
+    bucklingData.forEach(b => { bckMap[b.id] = b; });
+
+    // Build Comprehensive Member Section & Buckling Schedule Table HTML
+    let memberScheduleRowsHtml = (res.elements || []).map(el => {
+        let b = bckMap[el.id] || {};
+        let ovr = (typeof memberOverrides !== 'undefined') ? memberOverrides[el.id] : null;
+        let geo = ovr && ovr.section ? calcSectionGeometryJS(ovr.section.shape, ovr.section.params) : defaultGeo;
+        let bckCfg = ovr && ovr.buckling ? ovr.buckling : (typeof defaultBucklingState !== 'undefined' ? defaultBucklingState : {});
+
+        let ku = (typeof b.axis_u?.k === 'number') ? b.axis_u.k : (b.ku || bckCfg.ku || 1.0);
+        let kv = (typeof b.axis_v?.k === 'number') ? b.axis_v.k : (b.kv || bckCfg.kv || 1.0);
+        let Lu = (typeof b.axis_u?.L === 'number') ? b.axis_u.L : (b.Lu || el.length);
+        let Lv = (typeof b.axis_v?.L === 'number') ? b.axis_v.L : (b.Lv || el.length);
+
+        let pcr_kN = b.p_cr_gov ? (b.p_cr_gov / 1000.0).toFixed(2) : '&mdash;';
+        let utilPct = (typeof b.utilisation === 'number' && b.utilisation > 0) ? (b.utilisation * 100).toFixed(0) + '%' : '&mdash;';
+        
+        let statusBadge = '<span style="color:#64748b;">N/A (Tension)</span>';
+        if (el.force < -1e-4) {
+            if (b.status === 'Buckled' || (b.utilisation && b.utilisation >= 1.0)) {
+                statusBadge = '<span style="color:#dc2626; font-weight:700;">⚠ BUCKLED</span>';
+            } else if (b.status === 'Safe' || (b.utilisation && b.utilisation < 1.0)) {
+                statusBadge = '<span style="color:#16a34a; font-weight:700;">✓ Safe</span>';
+            } else {
+                statusBadge = '<span style="color:#d97706;">Not Configured</span>';
+            }
+        } else if (Math.abs(el.force) <= 1e-4) {
+            statusBadge = '<span style="color:#64748b;">Zero Force</span>';
+        }
+
+        let shapeName = (geo.shape || 'solid_circle').replace(/_/g, ' ').toUpperCase();
+
+        return `<tr>
+          <td style="font-weight:700; color:#1e3a8a;">E${el.id}</td>
+          <td>N${el.startNode}&ndash;N${el.endNode}</td>
+          <td>${fmtDot(el.length, 3)}</td>
+          <td>${shapeName}</td>
+          <td>${(geo.A * 1e6).toFixed(1)}</td>
+          <td>${(geo.Iu * 1e12).toLocaleString(undefined, {maximumFractionDigits:0})}</td>
+          <td>${(geo.Iv * 1e12).toLocaleString(undefined, {maximumFractionDigits:0})}</td>
+          <td>${(ku * Lu).toFixed(2)} / ${(kv * Lv).toFixed(2)}</td>
+          <td><b>${el.force > 0 ? '+' : ''}${el.force.toFixed(2)}</b></td>
+          <td>${b.governing_axis ? b.governing_axis.toUpperCase() : 'N/A'}</td>
+          <td>${pcr_kN}</td>
+          <td><b>${utilPct}</b></td>
+          <td>${statusBadge}</td>
+        </tr>`;
+    }).join('');
+
+    let forcesHtml = (res.elements || []).map(el => {
+        let bInfo = bckMap[el.id] || {};
         let forceFormatted = (el.force > 0) 
             ? `<span style="color:#16a34a; font-weight:700; font-family:'Segoe UI', Arial, sans-serif;">+${Math.abs(el.force).toFixed(2)} (T)</span>` 
             : (el.force < 0 ? `<span style="color:#dc2626; font-weight:700; font-family:'Segoe UI', Arial, sans-serif;">-${Math.abs(el.force).toFixed(2)} (C)</span>` : `<span style="color:#64748b; font-family:'Segoe UI', Arial, sans-serif;">0.00</span>`);
@@ -2818,31 +3742,35 @@ function generateReportHTML() {
             ? `<span style="color:#16a34a;">+${el.stress.toFixed(2)}</span>`
             : (el.stress < 0 ? `<span style="color:#dc2626;">${el.stress.toFixed(2)}</span>` : `0.00`);
 
-        let strainFormatted = (el.strain > 0 ? '+' : '') + el.strain.toExponential(2);
+        let strainFormatted = (el.strain > 0 ? '+' : '') + (typeof el.strain === 'number' ? el.strain.toExponential(2) : '0.00e+0');
 
-        // Euler Critical Buckling Capacity for this member: Pcr = (pi^2 * E * I) / L^2
-        let Pcr_N = (Math.PI * Math.PI * E_val * I_eff) / (el.length * el.length);
-        let Pcr_kN = Pcr_N / 1000.0;
-        let pcrFormatted = `${Pcr_kN.toFixed(2)} kN`;
+        // True Governing Euler Capacity
+        let pcrGov_kN = bInfo.p_cr_gov ? (bInfo.p_cr_gov / 1000.0) : 0;
+        let pcrFormatted = pcrGov_kN > 0 ? `${pcrGov_kN.toFixed(2)} kN (${(bInfo.governing_axis || 'u').toUpperCase()})` : `&mdash;`;
 
         let stateDisplay = `<span style="color:#64748b;">Zero Force</span>`;
         if (el.force > 1e-6) {
             stateDisplay = `<span style="color:#16a34a; font-weight:700;">Tension (T)</span>`;
         } else if (el.force < -1e-6) {
-            let util = Math.abs(el.force) / Pcr_kN;
-            if (util >= 1.0) {
-                stateDisplay = `<span style="color:#dc2626; font-weight:700;">Buckled (${Math.round(util * 100)}% Pcr)</span>`;
+            if (pcrGov_kN > 0) {
+                let util = (typeof bInfo.utilisation === 'number') ? bInfo.utilisation : (Math.abs(el.force) / pcrGov_kN);
+                let utilPct = Math.round(util * 100);
+                if (util >= 1.0 || bInfo.status === 'Buckled') {
+                    stateDisplay = `<span style="color:#dc2626; font-weight:700;">Buckled (${utilPct}% Pcr)</span>`;
+                } else {
+                    stateDisplay = `<span style="color:#d97706; font-weight:700;">Compression (${utilPct}% Pcr)</span>`;
+                }
             } else {
-                stateDisplay = `<span style="color:#d97706; font-weight:700;">Compression (${Math.round(util * 100)}% Pcr)</span>`;
+                stateDisplay = `<span style="color:#d97706; font-weight:700;">Compression (Not Assessed)</span>`;
             }
         }
 
         return `<tr><td><b>E${el.id}</b></td><td>N${el.startNode}–N${el.endNode}</td><td>${fmtDot(el.length, 3)}</td><td>${forceFormatted}</td><td>${stressFormatted}</td><td>${strainFormatted}</td><td>${pcrFormatted}</td><td>${stateDisplay}</td></tr>`;
-    }).join('') : '';
+    }).join('');
 
-    let maxStressVal = Math.max(...res.elements.map(e => Math.abs(e.stress || 0)));
-    let maxTensVal = Math.max(0, ...res.elements.map(e => e.force > 0 ? e.force : 0));
-    let maxCompVal = Math.max(0, ...res.elements.map(e => e.force < 0 ? Math.abs(e.force) : 0));
+    let maxStressVal = Math.max(0, ...(res.elements || []).map(e => Math.abs(e.stress || 0)));
+    let maxTensVal = Math.max(0, ...(res.elements || []).map(e => e.force > 0 ? e.force : 0));
+    let maxCompVal = Math.max(0, ...(res.elements || []).map(e => e.force < 0 ? Math.abs(e.force) : 0));
 
     let maxDispNode = 1;
     if (res.U) {
@@ -2853,20 +3781,21 @@ function generateReportHTML() {
         });
     }
 
-        // Dynamic Structural Verdict & Instability Evaluation (Section 12)
-    let allowableStress = (state && state.allowableStress) ? Number(state.allowableStress) : 250.0; // 250 MPa default for structural steel
+    // Dynamic Structural Verdict & Instability Evaluation (Section 12)
+    let allowableStress = (state && state.allowableStress) ? Number(state.allowableStress) : 250.0;
     let buckledMembers = [];
     let overstressedMembers = [];
     let maxBucklingDemandPct = 0;
 
     if (res && res.elements) {
         res.elements.forEach(el => {
-            let Pcr_N = (Math.PI * Math.PI * E_val * I_eff) / (el.length * el.length);
-            let Pcr_kN = Pcr_N / 1000.0;
-            if (el.force < -1e-6) {
-                let demandPct = Math.round((Math.abs(el.force) / Pcr_kN) * 100);
+            let bInfo = bckMap[el.id] || {};
+            let pcrGov_kN = bInfo.p_cr_gov ? (bInfo.p_cr_gov / 1000.0) : 0;
+            if (el.force < -1e-6 && pcrGov_kN > 0) {
+                let demand = (typeof bInfo.utilisation === 'number') ? bInfo.utilisation : (Math.abs(el.force) / pcrGov_kN);
+                let demandPct = Math.round(demand * 100);
                 if (demandPct > maxBucklingDemandPct) maxBucklingDemandPct = demandPct;
-                if (demandPct >= 100 || (el.state && el.state.includes('Buckled'))) {
+                if (demandPct >= 100 || bInfo.status === 'Buckled' || (el.state && el.state.includes('Buckled'))) {
                     buckledMembers.push({ id: el.id, pct: demandPct });
                 }
             }
@@ -2888,12 +3817,12 @@ function generateReportHTML() {
     let verdictText = '';
     if (buckledMembers.length > 0) {
         let buckledIDs = buckledMembers.map(m => `E${m.id}`).join(', ');
-        verdictText = `<b>Structural Verdict:</b> The finite element analysis converged successfully and global static equilibrium is satisfied (Max displacement: <b>${res.maxDisp.toFixed(2)} mm</b>, Peak stress: <b>${maxStressVal.toFixed(1)} MPa</b>). However, critical instability was detected: member(s) <b>${buckledIDs}</b> exceed their Euler critical buckling capacity (max demand: <b>${maxBucklingDemandPct}% of P<sub>cr</sub></b>). Consequently, the structure cannot be declared safe in its current configuration and requires cross-section stiffening or bracing redesign.`;
+        verdictText = `<b>Structural Verdict:</b> The finite element analysis converged successfully and global static equilibrium is satisfied (Max displacement: <b>${(res.maxDisp || 0).toFixed(2)} mm</b>, Peak stress: <b>${maxStressVal.toFixed(1)} MPa</b>). However, critical instability was detected: member(s) <b>${buckledIDs}</b> exceed their Euler critical buckling capacity (max demand: <b>${maxBucklingDemandPct}% of P<sub>cr</sub></b>). Consequently, the structure cannot be declared safe in its current configuration and requires cross-section stiffening or bracing redesign.`;
     } else if (overstressedMembers.length > 0) {
         let overIDs = overstressedMembers.map(m => `E${m.id}`).join(', ');
-        verdictText = `<b>Structural Verdict:</b> The finite element analysis converged successfully and global static equilibrium is satisfied (Max displacement: <b>${res.maxDisp.toFixed(2)} mm</b>, Peak stress: <b>${maxStressVal.toFixed(1)} MPa</b>). However, excessive axial stress was detected: member(s) <b>${overIDs}</b> exceed allowable yield capacity (peak stress: <b>${maxStressVal.toFixed(1)} MPa</b> vs allowable <b>${allowableStress.toFixed(0)} MPa</b>). Consequently, the structure cannot be declared safe in its current configuration and requires cross-section enlargement.`;
+        verdictText = `<b>Structural Verdict:</b> The finite element analysis converged successfully and global static equilibrium is satisfied (Max displacement: <b>${(res.maxDisp || 0).toFixed(2)} mm</b>, Peak stress: <b>${maxStressVal.toFixed(1)} MPa</b>). However, excessive axial stress was detected: member(s) <b>${overIDs}</b> exceed allowable yield capacity (peak stress: <b>${maxStressVal.toFixed(1)} MPa</b> vs allowable <b>${allowableStress.toFixed(0)} MPa</b>). Consequently, the structure cannot be declared safe in its current configuration and requires cross-section enlargement.`;
     } else {
-        verdictText = `<b>Structural Verdict:</b> The finite element analysis converged successfully and global static equilibrium is satisfied. Maximum nodal displacement (<b>${res.maxDisp.toFixed(2)} mm</b>) and peak axial stress (<b>${maxStressVal.toFixed(1)} MPa</b>) remain well within elastic limits, and all compression members are safe against Euler buckling. The structure is stable and adequate for the applied loads.`;
+        verdictText = `<b>Structural Verdict:</b> The finite element analysis converged successfully and global static equilibrium is satisfied. Maximum nodal displacement (<b>${(res.maxDisp || 0).toFixed(2)} mm</b>) and peak axial stress (<b>${maxStressVal.toFixed(1)} MPa</b>) remain well within elastic limits, and all compression members are safe against Euler buckling. The structure is stable and adequate for the applied loads.`;
     }
 
     let dateStr = new Date().toLocaleDateString('en-GB', {day: '2-digit', month: 'long', year: 'numeric'});
@@ -2943,34 +3872,34 @@ function generateReportHTML() {
 <div class="page">
   <div style="text-align: center;">
     <h1>2D TRUSS ANALYSIS REPORT</h1>
-    <div class="subtitle">Structural Evaluation & Finite Element Verification · Project: ${pName}</div>
+    <div class="subtitle">Structural Evaluation &amp; Finite Element Verification &middot; Project: ${pName}</div>
   </div>
   <div class="line"></div>
   <div class="meta">
     <b>Report Date:</b><span>${dateStr}</span>
-    <b>Software System:</b><span>TrussLab Analyzer · Structural Engineering Suite</span>
-    <b>Analysis Methodology:</b><span>Direct Stiffness Method (DSM) & Finite Element Formulation</span>
-    <b>Governing Unit System:</b><span>SI Standard — Length (m), Force (kN), Stress (MPa), Displacement (mm)</span>
-    <b>Analysis Engine:</b><span>Dual Hybrid Engine (Embedded Julia & Built-in DSM)</span>
-    <b>Convergence Status:</b><span class="badge">Analysis Converged ✓</span>
+    <b>Software System:</b><span>TrussLab Analyzer &middot; Structural Engineering Suite</span>
+    <b>Analysis Methodology:</b><span>Direct Stiffness Method (DSM) &amp; Finite Element Formulation</span>
+    <b>Governing Unit System:</b><span>SI Standard &mdash; Length (m), Force (kN), Stress (MPa), Displacement (mm)</span>
+    <b>Analysis Engine:</b><span>Dual Hybrid Engine (Embedded Julia &amp; Built-in DSM)</span>
+    <b>Convergence Status:</b><span class="badge">Analysis Converged &#10003;</span>
   </div>
   <h3>Structural Model Overview</h3>
   <div class="diagram" style="height: 270px; padding-top: 10px; overflow: hidden; position: relative;"><img src="${overviewImg}" style="max-height: 100%; max-width: 100%; object-fit: contain; display: block; margin: 0 auto;"></div>
   <div class="note">
     <b>Executive Summary:</b> This engineering document contains verified mathematical results for nodal geometry, applied boundary conditions, structural load paths, support reactions, and element internal stress states. Numerical quantities are calculated directly from equilibrium equations and elasticity criteria.
   </div>
-  <div class="footer"><span>TrussLab Analyzer · Complete Engineering Report</span><span>Page 1 of 4</span></div>
+  <div class="footer"><span>TrussLab Analyzer &middot; Complete Engineering Report</span><span>Page 1 of 4</span></div>
 </div>
 
 <!-- PAGE 2: GEOMETRY & STRUCTURAL MESH -->
 <div class="page">
-  <h2>1. Model Definition & Statistics</h2>
+  <h2>1. Model Definition &amp; Statistics</h2>
   <table>
     <tr><th>Parameter</th><th>Specification</th><th>Parameter</th><th>Specification</th></tr>
-    <tr><td>Project Title</td><td><b>${pName}</b></td><td>Coordinate Space</td><td>2D Planar (X–Y)</td></tr>
+    <tr><td>Project Title</td><td><b>${pName}</b></td><td>Coordinate Space</td><td>2D Planar (X&ndash;Y)</td></tr>
     <tr><td>Total Nodes (j)</td><td>${nodeKeys.length}</td><td>Active DOFs (2j - r)</td><td>${2 * nodeKeys.length - Object.values(assignments).filter(a=>a.ux==='fixed').length - Object.values(assignments).filter(a=>a.uy==='fixed').length}</td></tr>
     <tr><td>Triangles Defined</td><td>${state.triangles?.length || 0}</td><td>Unique Elements (b)</td><td>${state.elements.length}</td></tr>
-    <tr><td>Static Determinacy</td><td>b + r ≥ 2j (Stable)</td><td>Analysis Type</td><td>1st Order Elastic Direct Stiffness</td></tr>
+    <tr><td>Static Determinacy</td><td>b + r &ge; 2j (Stable)</td><td>Analysis Type</td><td>1st Order Elastic Direct Stiffness</td></tr>
   </table>
 
   <h2>2. Triangle Input Specification</h2>
@@ -2999,12 +3928,12 @@ function generateReportHTML() {
 
   <h2>4. Structural Geometry Wireframe</h2>
   <div class="diagram" style="height: 230px; margin: 6px 0 10px; overflow: hidden; position: relative;"><img src="${geoImg}" style="max-height: 100%; max-width: 100%; object-fit: contain; display: block; margin: 0 auto;"></div>
-  <div class="footer"><span>TrussLab Analyzer · Complete Engineering Report</span><span>Page 2 of 4</span></div>
+  <div class="footer"><span>TrussLab Analyzer &middot; Complete Engineering Report</span><span>Page 2 of 4</span></div>
 </div>
 
 <!-- PAGE 3: PROPERTIES, BOUNDARY CONDITIONS & REACTIONS -->
 <div class="page">
-  <h2>5. Material &amp; Cross-Section Properties</h2>
+  <h2>5. Material &amp; Cross-Section Specification</h2>
   <table style="table-layout: fixed; width: 100%;">
     <colgroup>
       <col style="width: 38%;">
@@ -3014,108 +3943,116 @@ function generateReportHTML() {
     </colgroup>
     <thead>
       <tr>
-        <th style="width: 38%;">Parameter / Property</th>
-        <th style="width: 24%;">Symbol / Equation</th>
-        <th style="width: 24%;">Value</th>
-        <th style="width: 14%;">Unit</th>
+        <th>Parameter / Property</th>
+        <th>Symbol / Source</th>
+        <th>Value</th>
+        <th>Unit</th>
       </tr>
     </thead>
     <tbody>
       <tr>
         <td>Young's Modulus of Elasticity</td>
-        <td><span style="font-weight:700; font-family:serif; font-style:italic;">E</span></td>
+        <td><span style="font-weight:700; font-style:italic;">E</span></td>
         <td>${(E_val / 1e9).toFixed(0)}</td>
         <td>GPa</td>
       </tr>
       <tr>
         <td>Poisson's Ratio</td>
-        <td><span style="font-weight:700; font-family:'Segoe UI', Roboto, Arial, sans-serif; font-style:italic;">&nu;</span></td>
+        <td><span style="font-style:italic;">&nu;</span></td>
         <td>${(state.nu || 0.30).toFixed(2)}</td>
         <td>&mdash;</td>
       </tr>
       <tr>
         <td>Material Density</td>
-        <td><span style="font-weight:700; font-family:serif; font-style:italic;">&rho;</span></td>
+        <td><span style="font-style:italic;">&rho;</span></td>
         <td>${(state.density || 7850).toFixed(0)}</td>
         <td>kg/m<sup>3</sup></td>
       </tr>
       <tr>
-        <td>Cross-Sectional Area</td>
-        <td><span style="font-weight:700; font-family:serif; font-style:italic;">A</span></td>
-        <td>${(A_val * 1e6).toFixed(0)}</td>
-        <td>mm<sup>2</sup> (${A_val.toExponential(2)} m<sup>2</sup>)</td>
-      </tr>
-      <tr>
-        <td>Equivalent Section Profile</td>
+        <td>Default Section Profile</td>
         <td>Shape</td>
-        <td>Solid Circular Bar</td>
+        <td>${(defaultGeo.shape || 'solid_circle').replace(/_/g, ' ').toUpperCase()}</td>
         <td>&mdash;</td>
       </tr>
       <tr>
-        <td>Effective Bar Diameter</td>
-        <td><span style="font-style:italic;">d</span> = &radic;(4<span style="font-style:italic;">A</span> / &pi;)</td>
-        <td>${(d_eff * 1000).toFixed(2)}</td>
+        <td>Default Cross-Section Area</td>
+        <td><span style="font-style:italic;">A</span></td>
+        <td>${(defaultGeo.A * 1e6).toFixed(1)}</td>
+        <td>mm<sup>2</sup> (${defaultGeo.A.toExponential(3)} m<sup>2</sup>)</td>
+      </tr>
+      <tr>
+        <td>Principal Second Moment (I<sub>u</sub>)</td>
+        <td><span style="font-style:italic;">I<sub>u</sub></span></td>
+        <td>${(defaultGeo.Iu * 1e12).toLocaleString(undefined, {maximumFractionDigits:1})}</td>
+        <td>mm<sup>4</sup></td>
+      </tr>
+      <tr>
+        <td>Principal Second Moment (I<sub>v</sub>)</td>
+        <td><span style="font-style:italic;">I<sub>v</sub></span></td>
+        <td>${(defaultGeo.Iv * 1e12).toLocaleString(undefined, {maximumFractionDigits:1})}</td>
+        <td>mm<sup>4</sup></td>
+      </tr>
+      <tr>
+        <td>Minimum Radius of Gyration</td>
+        <td><span style="font-style:italic;">r<sub>min</sub></span> = &radic;(<span style="font-style:italic;">I<sub>min</sub></span> / <span style="font-style:italic;">A</span>)</td>
+        <td>${(defaultGeo.r_min * 1000).toFixed(2)}</td>
         <td>mm</td>
-      </tr>
-      <tr>
-        <td>Second Moment of Area (Inertia)</td>
-        <td><span style="font-style:italic;">I</span> = &pi;<span style="font-style:italic;">d</span><sup>4</sup> / 64 = <span style="font-style:italic;">A</span><sup>2</sup> / (4&pi;)</td>
-        <td>${(I_eff * 1e12).toFixed(1)}</td>
-        <td>mm<sup>4</sup> (${I_eff.toExponential(3)} m<sup>4</sup>)</td>
-      </tr>
-      <tr>
-        <td>Radius of Gyration</td>
-        <td><span style="font-style:italic;">r</span> = &radic;(<span style="font-style:italic;">I</span> / <span style="font-style:italic;">A</span>) = <span style="font-style:italic;">d</span> / 4</td>
-        <td>${(r_gyr * 1000).toFixed(2)}</td>
-        <td>mm</td>
-      </tr>
-      <tr>
-        <td>Column Effective Length Factor</td>
-        <td><span style="font-weight:700; font-family:serif; font-style:italic;">K</span></td>
-        <td>1.00 (Pinned&ndash;Pinned)</td>
-        <td>&mdash;</td>
       </tr>
     </tbody>
   </table>
-  <div class="note">
-    <b>Euler Critical Buckling Formulation:</b> Member capacity is governed by: 
-    <code style="font-weight:700; color:#1e3a8a;">P<sub>cr</sub> = (&pi;<sup>2</sup> &middot; E &middot; I) / (K &middot; L)<sup>2</sup></code>. 
-    Members experiencing compressive forces exceeding 100% of P<sub>cr</sub> are highlighted as Euler Buckled.
-  </div>
 
-  <h2>6. Boundary Restraints & Support Reactions</h2>
+  <h2 style="margin-top: 10px;">6. Member Section &amp; Dual-Axis Buckling Schedule</h2>
+  <div style="font-size: 10px; color: #475569; margin-bottom: 4px;">
+    Governing Euler capacity: <code style="color:#1e3a8a; font-weight:700;">P<sub>cr,gov</sub> = min( &pi;&sup2;EI<sub>u</sub> / (k<sub>u</sub>L<sub>u</sub>)&sup2;, &pi;&sup2;EI<sub>v</sub> / (k<sub>v</sub>L<sub>v</sub>)&sup2; )</code>.
+  </div>
+  <table style="width: 100%; font-size: 9px;">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Nodes</th>
+        <th>L (m)</th>
+        <th>Section</th>
+        <th>A (mm&sup2;)</th>
+        <th>I<sub>u</sub> (mm⁴)</th>
+        <th>I<sub>v</sub> (mm⁴)</th>
+        <th>kL<sub>u</sub> / kL<sub>v</sub></th>
+        <th>N (kN)</th>
+        <th>Gov</th>
+        <th>P<sub>cr</sub> (kN)</th>
+        <th>Demand</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${memberScheduleRowsHtml}
+    </tbody>
+  </table>
+
+  <h2 style="margin-top: 8px;">7. Boundary Restraints &amp; Support Reactions</h2>
   <table>
     <tr><th>Node</th><th>Support Type</th><th>Ux Fixity</th><th>Uy Fixity</th><th>Rx Reaction</th><th>Ry Reaction</th><th>Resultant |R|</th></tr>
     ${supHtml}
   </table>
-  <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px; padding:6px 12px; font-size:10px; margin-top:-2px; margin-bottom:8px;">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-      <span style="font-weight:700; color:#1e293b;">Static Equilibrium Verification (Sum(F) = 0):</span>
-      <span class="badge" style="background:#e8f6ee; color:#16a34a; font-weight:700; font-size:9.5px;">Global Equilibrium Satisfied ✓</span>
+  <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px; padding:5px 10px; font-size:9.5px; margin-top:-2px; margin-bottom:6px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+      <span style="font-weight:700; color:#1e293b;">Static Equilibrium Verification (&Sigma;F = 0):</span>
+      <span class="badge" style="background:#e8f6ee; color:#16a34a; font-weight:700; font-size:9px;">Global Equilibrium Satisfied &#10003;</span>
     </div>
-    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; font-variant-numeric: tabular-nums; font-size:9.5px; color:#334155; background:#ffffff; border:1px solid #e2e8f0; border-radius:4px; padding:6px 10px;">
-      <div><b>Sum(F<sub>x</sub>)</b> = Sum(F<sub>x,applied</sub>) + Sum(R<sub>x</sub>) = (${fmtF(sumFxApp)}) + (${fmtF(sumRx)}) = <b>${Math.abs(netFx) < 0.01 ? '0.00 kN' : fmtF(netFx)}</b> <span style="color:#16a34a; font-weight:800;">✓</span></div>
-      <div><b>Sum(F<sub>y</sub>)</b> = Sum(F<sub>y,applied</sub>) + Sum(R<sub>y</sub>) = (${fmtF(sumFyApp)}) + (${fmtF(sumRy)}) = <b>${Math.abs(netFy) < 0.01 ? '0.00 kN' : fmtF(netFy)}</b> <span style="color:#16a34a; font-weight:800;">✓</span></div>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; font-variant-numeric: tabular-nums; font-size:9px; color:#334155; background:#ffffff; border:1px solid #e2e8f0; border-radius:4px; padding:4px 8px;">
+      <div><b>&Sigma;F<sub>x</sub></b> = (${fmtF(sumFxApp)}) + (${fmtF(sumRx)}) = <b>${Math.abs(netFx) < 0.01 ? '0.00 kN' : fmtF(netFx)}</b> <span style="color:#16a34a; font-weight:800;">&#10003;</span></div>
+      <div><b>&Sigma;F<sub>y</sub></b> = (${fmtF(sumFyApp)}) + (${fmtF(sumRy)}) = <b>${Math.abs(netFy) < 0.01 ? '0.00 kN' : fmtF(netFy)}</b> <span style="color:#16a34a; font-weight:800;">&#10003;</span></div>
     </div>
   </div>
 
-  <h2>7. Applied Nodal Loads</h2>
+  <h2>8. Applied Nodal Loads</h2>
   <table>
     <tr><th>Node</th><th>Fx Load (kN)</th><th>Fy Load (kN)</th><th>Load Description</th></tr>
     ${loadsHtml}
   </table>
-
-  <h2>8. Model Pre-Flight Validation Checks</h2>
-  <table>
-    <tr><th>Engineering Check</th><th>Status</th><th>Verification Finding</th></tr>
-    <tr><td>Triangle Inequality Validity</td><td class="result-good">PASS ✓</td><td>All geometric side lengths satisfy physical triangle closure (a + b > c).</td></tr>
-    <tr><td>Kinematic Mechanism Check</td><td class="result-good">PASS ✓</td><td>Model satisfies Maxwell determinacy criterion: b + r ≥ 2j.</td></tr>
-    <tr><td>Stiffness Matrix Invertibility</td><td class="result-good">PASS ✓</td><td>Global [K] is non-singular, positive definite, and free of rigid-body modes.</td></tr>
-  </table>
-  <div class="footer"><span>TrussLab Analyzer · Complete Engineering Report</span><span>Page 3 of 4</span></div>
+  <div class="footer"><span>TrussLab Analyzer &middot; Complete Engineering Report</span><span>Page 3 of 4</span></div>
 </div>
 
-<!-- PAGE 4: RESULTS, FORCES & EXECUTIVE SUMMARY (COMPACT CONSOLIDATION) -->
+<!-- PAGE 4: RESULTS, FORCES & EXECUTIVE SUMMARY -->
 <div class="page" style="page-break-after: avoid;">
   <h2>9. Nodal Joint Displacements</h2>
   <table>
@@ -3123,7 +4060,7 @@ function generateReportHTML() {
     ${dispHtml}
   </table>
 
-  <h2>10. Element Forces, Stress, Strain & Buckling Verification</h2>
+  <h2>10. Element Forces, Stress, Strain &amp; Buckling Verification</h2>
   <table>
     <tr>
       <th>Element</th>
@@ -3131,21 +4068,21 @@ function generateReportHTML() {
       <th>Length (m)</th>
       <th>Axial Force (kN)</th>
       <th>Stress (MPa)</th>
-      <th>Strain (ε)</th>
+      <th>Strain (&epsilon;)</th>
       <th>Pcr Capacity</th>
       <th>Structural State</th>
     </tr>
     ${forcesHtml}
   </table>
 
-  <h2>11. Deformed Shape Visualization (Magnification: ${(state.lastMagScale || 100).toLocaleString()}×)</h2>
-  <div class="diagram" style="height: 180px; margin-bottom: 12px; overflow: hidden; position: relative;"><img src="${resultImg}" style="max-height: 100%; max-width: 100%; object-fit: contain; display: block; margin: 0 auto;"></div>
+  <h2>11. Deformed Shape Visualization (Magnification: ${(state.lastMagScale || 100).toLocaleString()}&times;)</h2>
+  <div class="diagram" style="height: 180px; margin-bottom: 8px; overflow: hidden; position: relative;"><img src="${resultImg}" style="max-height: 100%; max-width: 100%; object-fit: contain; display: block; margin: 0 auto;"></div>
 
   <h2>12. Key Structural Performance Summary</h2>
   <div class="kpis">
     <div class="kpi">
       <div class="kpi-label">Max Joint Deflection</div>
-      <div class="kpi-value">${res.maxDisp.toFixed(2)} mm</div>
+      <div class="kpi-value">${(res.maxDisp || 0).toFixed(2)} mm</div>
       <div style="font-size: 8.5px; color:#64748b; margin-top:2px;">At Node N${maxDispNode}</div>
     </div>
     <div class="kpi">
@@ -3170,26 +4107,39 @@ function generateReportHTML() {
     <div>${verdictText}</div>
   </div>
 
-  <div class="footer"><span>TrussLab Analyzer · Complete Engineering Report</span><span>Page 4 of 4</span></div>
+  <div class="footer"><span>TrussLab Analyzer &middot; Complete Engineering Report</span><span>Page 4 of 4</span></div>
 </div>
 `;
 }
 
 function exportPDF() {
-    let report = document.getElementById('print-report');
-    if(!report) {
-        report = document.createElement('div');
-        report.id = 'print-report';
-        report.className = 'print-only';
-        document.body.appendChild(report);
+    try {
+        let res = state.analysisResult;
+        if (!res || !res.elements || res.elements.length === 0) {
+            toast("⚠️ Please run analysis first in Step 6 before printing/saving report.");
+            return;
+        }
+        let report = document.getElementById('print-report');
+        if(!report) {
+            report = document.createElement('div');
+            report.id = 'print-report';
+            report.className = 'print-only';
+            document.body.appendChild(report);
+        }
+        
+        let html = generateReportHTML();
+        if (!html) {
+            toast("⚠️ Could not generate report HTML. Please verify analysis results.");
+            return;
+        }
+        report.innerHTML = html;
+        
+        // Brief timeout to ensure DOM images are loaded into cache before print
+        setTimeout(() => { window.print(); }, 250);
+    } catch (err) {
+        console.error("Export PDF error:", err);
+        alert("Error generating PDF report: " + err.message);
     }
-    
-    let html = generateReportHTML();
-    if (!html) return;
-    report.innerHTML = html;
-    
-    // Brief timeout to ensure DOM images are loaded into cache before print
-    setTimeout(() => { window.print(); }, 250);
 }
 
 function drawTruss(canvasId, pCoords, pElements, pAssign, deformed=false, loads=false, small=false, magScale=null) {
@@ -3781,7 +4731,8 @@ function validateStep(s) {
       return true;
   }
 
-function go(step){
+function go(step) {
+  if(step === 4) { setTimeout(renderStep4UI, 20); }
   // Enforce sequential progression and strict validation
   if(step > highestStepReached) {
       if(step > highestStepReached + 1) {
